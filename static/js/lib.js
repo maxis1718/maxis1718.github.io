@@ -41,3 +41,9 @@ function _verticalCenter()
     
 }
 
+function highlighter(detect, target){
+
+    $(detect).removeClass('highlighted');
+    $(target).addClass('highlighted');
+}
+
