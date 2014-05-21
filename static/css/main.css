@@ -7,9 +7,15 @@ a {color: inherit; text-decoration: none}
 	#logo {width: 320px; float: left; height: 48px; line-height: 48px; font-size: 24px; font-family: "Segoe UI light"; letter-spacing: 4px; word-spacing: 3px; background: #9c0000; color: white; text-align: center}
 	#menu {width: 640px; height: 48px; background: none; margin: 0 0 0 auto; position: relative; float: left;}
 	.menu-item {max-width: 160px; height: 48px; background: none; float: left; line-height: 48px; text-align: center; /*border-right: 1px solid black;*/ position: relative; color: #666; padding-left: 32px; padding-right: 24px}
-	.menu-item span:hover, .selected { border-bottom: 1px dashed gray; cursor: pointer; color: #8c0000;}
+	.menu-item span:hover, .selected {
+		 /*border-bottom: 1px dashed gray; */
+		 cursor: pointer; 
+		 color: #8c0000;
+	}
 	.menu-item span a {text-decoration: none; color: inherit;}
-	.menu-item .tri {position: absolute; bottom:0px;}
+	.menu-item .tri {
+		position: absolute; bottom:0px;
+	}
 
 .tri {
 	width: 0px;
@@ -114,6 +120,7 @@ table .right p a:hover{text-decoration: underline;}
 	{
 		/*display: inline-block;*/
 		height: 32px;
+		padding-bottom: 36px;
 		/*background: red;*/
 	}
 	#copyright-wrap
