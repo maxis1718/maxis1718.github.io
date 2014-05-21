@@ -2,16 +2,16 @@
 	<tr>
 		<td id="profile-left">
 			<div>
-				<img id="profile-img" width="340" src="static/img/wtf.png"/>
-				<!-- <img id="profile-img" width="340" src="static/img/profile-2.jpg"/> -->
+				<img class="profile-img img-loop" width="300" src="static/img/profile1.jpg"/>
 			</div>
 		</td>
 		<td id="profile-right">
 			<ul>
-				<li>I'm a Research Assistant in 
+				<li>
+					I'm a Research Assistant in
 					<a href="http://www.iis.sinica.edu.tw/index_en.html" target="_blank">Academia Sinica</a> 
 					(<a href="http://doraemon.iis.sinica.edu.tw" target="_blank">NLP Lab</a>)
-				</li>			
+				</li>
 				<li>I'm a <em>Python</em>er and a passionate <em>web</em> developer.</li>
 				<!-- <li>I enjoy the quest of web interface development</li> -->
 				<li>I think Natural Language Processing (NLP) is fascinating <strong>!</strong></li>

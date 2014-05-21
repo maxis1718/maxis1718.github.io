@@ -1,7 +1,7 @@
 $(document).ready(function(){
 	var router = new myRoute();
 	Backbone.history.start();
-
+	events();
 });
 
 var works = [];
@@ -142,3 +142,16 @@ var mainView = Backbone.View.extend({
     	});
     }
 });
+
+
+//// ------------------------------------------------------------------------------------ ////
+
+
+function events() {
+	var social_imgs = $('.socialnetwork-block').find('img');
+	social_imgs.mouseenter(function(){
+		$('#social-note').text( $(this).attr('alt') );
+	}).mouseleave(function(){
+		$('#social-note').text( 'FOLLOW:' );
+	});
+}

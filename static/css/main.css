@@ -18,7 +18,7 @@ a {color: inherit; text-decoration: none}
 	border-width: 0 9px 8px 9px;
 	border-color: transparent transparent #9c0000 transparent;
 }
-#content { width: 100%; min-height: 0px; padding-bottom: 24px;}
+#content { width: 100%; min-height: 320px; padding-bottom: 24px;}
 
 #profile-left, #profile-right 
 {
@@ -47,7 +47,13 @@ a {color: inherit; text-decoration: none}
 #profile-right ul li {line-height: 36px;}
 #profile-right ul li a {border-bottom: 1px dashed orange;}
 #profile-right ul li a:hover {border-bottom: 1px dashed #9c0000; color: #9c0000;}
-#profile-img {padding: 8px; background: white; border: 1px solid #bbb; box-shadow: 1px 1px 5px #bbb;}
+
+.profile-img {
+	padding: 8px; 
+	background: white; 
+	border: 1px solid #bbb; 
+	box-shadow: 1px 1px 5px #bbb;
+}
 
 
 .project-block {width: 100%; min-height: 240px; background: white; box-shadow: 3px 3px 5px #bbb; border-bottom: 1px solid #aaa; border-top: 1px solid #ddd; border-left: 1px solid #ddd; margin-top: 48px; /*border: 1px solid black;*/ color: #555; line-height: 24px; padding-bottom: 20px; padding-top: 12px;}
@@ -123,30 +129,58 @@ table .right p a:hover{text-decoration: underline;}
 
 	#socialnetwork 
 	{
-		width: 240px; 
+		min-width: 240px; 
+		max-width: 50%;
 		text-align: left;
 		/*float: left;*/
 		/*display: inline-block;*/
 		/*margin-left: 36px;*/
+		/*background: red;*/
+		line-height: 28px;
 	}
 		.socialnetwork-block 
 		{
 			/*float: left;*/
-			display: inline-block;
-			line-height: 32px;
+			/*display: inline-block;*/
+			float: left;
+			padding-top: 5px;
+			
+			/*background: blue;*/
+			/*margin-top:5px;*/
 			/*text-align: center;*/
 		}
+			.socialnetwork-block div.text
+			{
+				/*font-size: 14px;*/
+				/*line-height: 44px;*/
+				/*color: #444;*/
+				/*background: red;*/
+				/*line-height: 22px;*/
+				/*display: inline-block;*/
+
+			}
+			#social-note 
+			{
+
+				min-width: 86px;
+				text-align: right;
+				color: #777;
+				font-family: "Museo light";
+				font-size: 16px;
+				padding-right: 5px;
+			}
 			.socialnetwork-block img 
 			{
-				width: 24px;
-				margin-left: 0px;
-				margin-top: 2px;
+				width: 28px;
+				
+				margin-left: 5px;
 			}
-			.socialnetwork-block img[alt=github]
+			.socialnetwork-block img[alt=Github]
 			{
-				width: 22px;
+				width: 26px!important;
+				padding-left:2px;
+				padding-top:1px;
 			}
-
 
 /*#footer hr {display: block; height: 1px; border: 0; border-top: 1px solid #bbb; margin: 1em 0; padding: 0;}*/
 .hide {display: none}
