@@ -105,6 +105,11 @@ table .right p a:hover{text-decoration: underline;}
 	-moz-border-radius: 3px;
 	border-radius: 3px;}
 
+span.paper-title
+{
+	color: darkslateblue;
+}
+
 .interest-block li {color: #9c0000}
 .interest-block li span {color: #444;}
 .interest-block img {padding: 7px; background: white; border: 1px solid #bcbcbc; margin-top:12px; margin-bottom: 16px; margin-left: 12px;}
