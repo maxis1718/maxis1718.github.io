@@ -86,5 +86,16 @@
 		"link": "http://kristen-design.herokuapp.com/recipe", 
 		"team": ["kristen"], 
 		"preview": "yuchiao-content"
-	}
+	},
+	{
+		"name": "Howtospeak", 
+		"time": "2012", 
+		"detail": [
+			"A prototype before <a href=\"http://linggle.com/\" target=\"_blank\">linggle</a> for fast looking up google ngrams"], 
+		"note": "", 
+		"link": "http://fringe.nlpweb.org/howtospeak/", 
+		"team": [], 
+		"preview": "howtospeak-content"
+	},	
+	
 ]
