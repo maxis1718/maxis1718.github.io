@@ -36,8 +36,9 @@
 
 			</div>
 
-			<% if(work.team.length > 0) { %>
-			<div class="project-teamwork">Work with:<br>
+			
+			<div class="project-teamwork">
+				<span><%= work.team.length > 0 ? 'Work with:' : '' %><br></span> 
 				<% for(var i = 0; i < work.team.length; i ++) { %>
 				<% member = work.team[i]; %>
 				<span>
@@ -56,10 +57,9 @@
 						<%= i == work.team.length-2 ? 'and ' : ', ' %>
 					<% } %>					
 				</span>
-				<% } %>
 			</div>
 			<% } %>
-			
+
 		</td>
 	</tr>
 </table>
