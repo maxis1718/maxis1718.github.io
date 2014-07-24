@@ -35,6 +35,8 @@
 				<% }) %>
 
 			</div>
+
+			<% if(work.team.length > 0) { %>
 			<div class="project-teamwork">Work with:<br>
 				<% for(var i = 0; i < work.team.length; i ++) { %>
 				<% member = work.team[i]; %>
@@ -56,6 +58,8 @@
 				</span>
 				<% } %>
 			</div>
+			<% } %>
+			
 		</td>
 	</tr>
 </table>
