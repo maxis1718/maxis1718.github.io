@@ -27,7 +27,7 @@
 					and
 					<a href="https://www.itri.org.tw/eng/" target="_blank">ITRI</a>.
 				</li>
-				<li>Here's my <a href="static/files/Maxis-CV-with-pubs.pdf" target="_blank">CV</a></li>
+				<li>Here's my <a href="static/files/2014-Maxis-CV-with-pubs.pdf" target="_blank">CV</a></li>
 			</ul>
 		</td>
 	</tr>
