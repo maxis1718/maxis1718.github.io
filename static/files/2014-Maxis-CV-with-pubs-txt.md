@@ -3,7 +3,7 @@
 
 * maxis1718@gmail.com 
 * +886-930-368-569
-* 128 Academia Road, Section 2, Nankang, Taipei 11529, Taiwan
+* R501, Institute of Information Science, 128 Academia Road, Section 2, Nankang, Taipei 11529, Taiwan
 * http://maxis1718.github.io
 
 ## EDUCATION
@@ -31,7 +31,9 @@
 	- Manager: Dr. Meng-Sung Wu and Dr. Sen-Chia Chang
 	- Works: Developing an intelligent search system for movies and related comments using natural language as inputs
 3. Intern @ Microsoft Research Asia, Beijing
-	- Jul. 2012 – Oct. 2012	- Group: Knowledge Mining	- Mentor:  Dr. Chin-Yew Lin
+	- Jul. 2012 – Oct. 2012
+	- Group: Knowledge Mining
+	- Mentor:  Dr. Chin-Yew Lin
 	- NeedleSeek: Mine open-domain semantic knowledge from web-scale data sources. Mainly focus on knowledge-bases integrations and social media data visualization
 	- Award: Excellence Award of Microsoft Internship Program
 4. Research Assistant @ NTHU, Hsinchu
