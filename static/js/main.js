@@ -81,6 +81,7 @@ var myRoute = Backbone.Router.extend({
 		"about": "about",
 		"works": "works",
 		"publications": "publications",
+		"activity" : "activity", 
 	},
 	about: function() {
 		data.select = 'about';
@@ -108,6 +109,14 @@ var myRoute = Backbone.Router.extend({
 			{ templateName: "publications", rc: data, entry: $("#content"),	callback: null	}
 		]);
 	},
+	activity: function() {
+		data.select = 'activity';
+		var view = new mainView();
+		view.render([ 
+			{ templateName: "header", 		rc: data, entry: $("#header"),	callback: null 	},
+			{ templateName: "activity", 	rc: data, entry: $("#content"),	callback: null	}
+		]);		
+	}
 });
 
 
