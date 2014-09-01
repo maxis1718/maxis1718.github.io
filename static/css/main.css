@@ -136,9 +136,14 @@ span.paper-title
 		{
 			font-family: "Museo light";
 		}
+		.activity h2:before
+		{
+			content: "#";
+		}
 		.act 
 		{
-			padding-bottom: 25px;
+			width: 100%;
+			margin-bottom: 25px;
 		}
 
 #footer 
