@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Flappy Bird Clone</title>
+  <style type="text/css">
+  	button {
+	  width: 98px;
+	  font: 400 15px sans-serif;
+	  color: #fff;
+	  cursor: pointer;
+	  height: 32px;
+	  border: 0;
+	  border-radius: 4px;
+	  background: none repeat scroll 0 0 #3775DD;
+	  -webkit-box-shadow: 0 2px #21487f;
+	  box-shadow: 0 2px #21487f;
+	  position: relative;
+	  -webkit-appearance: none;
+	  outline: none;  		
+  	}
+  	button:active {
+  		background: none repeat scroll 0 0 #bb1420;
+  		-webkit-box-shadow: 0 2px #333;
+  		box-shadow: 0 2px #333;
+  	}
+  	.d-ib {
+  		display: inline-block;
+  	}
+  	#msg {
+  		font-size: 16px;
+  		font-family: Consolas;
+  		color: #bb1400;
+  	}
+  </style>
+</head>
+<body>
+  <div id="gameDiv"> </div>
+  <div>
+  	<button id="startButton" class="d-ib">start</button>
+  	<div id="msg" class="d-ib"></div>
+  </div>
+  <script type="text/javascript" src="assets/phaser.min.js"></script>
+  <script type="text/javascript" src="assets/main.js"></script>
+</body>
+</html>
