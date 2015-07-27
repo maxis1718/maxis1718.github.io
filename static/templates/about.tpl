@@ -7,8 +7,11 @@
 		</td>
 		<td id="profile-right">
 			<ul>
+                <li>
+                    I work at Yahoo!
+                </li>
 				<li>
-					I'm a Research Assistant in
+					I was a Research Assistant in
 					<a href="http://www.iis.sinica.edu.tw/index_en.html" target="_blank">Academia Sinica</a> 
 					(<a href="http://doraemon.iis.sinica.edu.tw" target="_blank">NLP Lab</a>)
 				</li>
