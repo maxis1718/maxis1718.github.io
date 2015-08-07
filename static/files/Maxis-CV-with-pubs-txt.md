@@ -21,10 +21,10 @@
 ## EXPERIENCE
 
 #### Software Engineer @ Yahoo!, Taipei
-- Dec. 2015 - Current
+- Dec. 2014 - Current
 - Search Team / Front-End development
 - Manager: Reggie Lai
-- Works: [Yahoo! front page](http://tw.yahoo.com), [Mobile Theme](http://yahoosearchtheme.tumblr.com/) and [TW/HK Search](https://goo.gl/eBNrOr)
+- Works: Mainly focus on front-end development, including [Yahoo! front page](http://tw.yahoo.com), [Mobile Theme](http://yahoosearchtheme.tumblr.com/) and [TW/HK Search](https://goo.gl/eBNrOr)
 
 #### Research Assistant @ Academia Sinica, Taipei
 - Nov. 2013 – Dec. 2014
