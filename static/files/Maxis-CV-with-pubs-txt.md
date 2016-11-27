@@ -4,7 +4,7 @@
 * maxis1718@gmail.com 
 * [+886-905-302-661](tel:+886-905-302-661)
 * 14F, No. 66, San-Chung Rd., Nankang Dist, Taipei 115, Taiwan [[map](https://goo.gl/dl1fK6)]
-* [maxis1718.github.io](http://maxis1718.github.io)
+* [linkedin](https://www.linkedin.com/in/maxiskao)
 
 ## EDUCATION
 * National Tsing Hua University, M.S. Computer Science, NLP Lab (GPA: 4.1)
@@ -23,33 +23,40 @@
 #### Software Engineer @ Yahoo!, Taipei
 - Dec. 2014 - Current
 - Search Team / Front-End development
-- Manager: Reggie Lai
-- Works: Mainly focus on front-end development, including [Yahoo! front page](http://tw.yahoo.com), [Mobile Theme](http://yahoosearchtheme.tumblr.com/) and [TW/HK Search](https://goo.gl/eBNrOr)
+- Products: [Yahoo! front page](http://tw.yahoo.com), [Mobile Theme](http://yahoosearchtheme.tumblr.com/) and [TW/HK Search](https://goo.gl/eBNrOr)
+- Mainly focus on font-end development, including UI optimization, platform redesign, TW/HK initiatives (Mobile Theme and Nearby), and data analytics
+- Awards:
+  - 2015 Top Hack of Yahoo TW/JP Joint Hackday
+  - 2016 Winner of Yahoo Bot Challenge
 
 #### Research Assistant @ Academia Sinica, Taipei
 - Nov. 2013 – Dec. 2014
-- Group: Natural Language and Knowledge Processing Lab
+- Natural Language and Knowledge Processing Lab
 - Advisor: Dr. Lun-Wei Ku
-- Project: [Feelit](http://doraemon.iis.sinica.edu.tw/feelit/) - Capturing Emotion Events from Web Posts using Patterns for Emotion Classification
+- Project: [Feelit](http://doraemon.iis.sinica.edu.tw/feelit/)
+  - Capturing sentiment and emotion events from web blog posts by learned patterns to benefit opinion analysis and context-aware recommendation.
+  - Emotion wheel visualization
+
 
 #### Intern @ ITRI, Hsinchu
 - Dec. 2012 – Apr. 2013
-- Group: Information and Communication Research
-- Manager: Dr. Meng-Sung Wu and Dr. Sen-Chia Chang
-- Works: Developing an intelligent search system for movies and related comments using natural language as inputs
+- Information and Communication Research
+- Project: MovieSearch
+  - Building an intelligent search engine, which supports human language input, to retrieve movies and comments.
 
 #### Intern @ Microsoft Research Asia, Beijing
 - Jul. 2012 – Oct. 2012
-- Group: Knowledge Mining
-- Mentor:  Dr. Chin-Yew Lin
-- NeedleSeek: Mine open-domain semantic knowledge from web-scale data sources. Mainly focus on knowledge-bases integrations and social media data visualization
+- Knowledge Mining by Dr. Chin-Yew Lin
+- NeedleSeek
+  -	Web semantic and ontology mining
+  -	Social media data visualization
 - Award: Excellence Award of Microsoft Internship Program
 
 #### Research Assistant @ NTHU, Hsinchu
 - Aug. 2011 – Jun. 2012
-- Manager: Dr. Chin-Tay Shih
-- Advisor: Dr. Jason S. Chang
-- Project: iSpin - Developing several interactive systems: “TELL” and "flashcard"
+- Advisor: Dr. Jason S. Chang and Dr. Chin-Tay Shih
+- Project: iSpin
+  - Working with MIRLab to build an interactive language learning system, TELL, which leverages TED Talks resources to provide accurate word/sentence pronunciation.
 
 #### Research Assistant @ NHCUE, Hsinchu
 - Advisor: Dr. Han-Chun Huang
@@ -74,4 +81,4 @@
 
 ---
 
-> [PDF version](http://maxis1718.github.io/static/files/2014-Maxis-CV-with-pubs.pdf)
+> [PDF version](http://maxis1718.github.io/static/files/Maxis-CV-with-pubs.pdf)
