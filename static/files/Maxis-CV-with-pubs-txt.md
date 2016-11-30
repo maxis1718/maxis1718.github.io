@@ -39,81 +39,79 @@
   - 2016 Yahoo Employee Welfare Committee
     - responsibility: to hold the 2016 TW Yahoo Summer Party
 
-##### [Web Search](https://tw.search.yahoo.com/search?p=maxiskao)
+- Projects
+  - [**Web Search**](https://tw.search.yahoo.com/search?p=maxiskao)
+    > `PHP`, `Node.js`, `YUI`, `React`/`Fluxible`, `webpack`, `selenium`, `jenkins`
+    
+    > `agile`, `scrum`, `sprint`, `kaban`
+    - Mainly focus on front-end development of the Search product across *40+ international markets*.
+    - Data-driven UI optimization based on large-scale **A/B testing** results. (millions of users per bucket)
+    - Platform redesign: migrating the Search Front-end from `PHP` + `YUI` to `Node` + `React` + `Fluxible` to boost development process and keep the product more maintainable.
+    - Experienced in **test automation**, including unit / functional tests and release **pipeline**.
 
-- Mainly focus on front-end development of the Search product across *40+ international markets*.
-- Data-driven UI optimization based on large-scale **A/B testing** results. (millions of users per bucket)
-- Platform redesign: migrating the Search Front-end from `PHP` + `YUI` to `Node` + `React` + `Fluxible` to boost development process and keep the product more maintainable.
-- Experienced in **test automation**, including unit / functional tests and release **pipeline**.
+  - [**Mobile Theme**](http://yahoosearchtheme.tumblr.com/)
+    > `PHP`, `JavaScript`, `Hadoop` (`Hive`, `Pig`), `Sass`, `Compass`, `Sherpa`
+    - A Taiwan / Hong Kong initiative that effectively improves the user engagement by more than 50%.
+    - Data analytics: leverage Apache Hive and Pig to analyze large data sets and extract product key metric from query logs for UI enhancement.
 
-> PLs, tools and libraries: `PHP`, `Node.js`, `YUI`, `React`/`Fluxible`, `webpack`, `selenium`, `jenkins`
+  - [**Yahoo Mobile Homepage**](https://tw.mobi.yahoo.com)
+    > `React` + `Fluxible`
+    - Developed Search Box and Assist using `React` + `Fluxible`
+    - Delivered context-aware default keywords on Search Box
+    - Built the Nearby Entry on Search Assist
 
-> software development: `agile`, `scrum`, `sprint`, `kaban`
-
-##### [Mobile Theme](http://yahoosearchtheme.tumblr.com/)
-
-- A Taiwan / Hong Kong initiative that effectively improves the user engagement by more than 50%.
-- Data analytics: leverage Apache Hive and Pig to analyze large data sets and extract product key metric from query logs for UI enhancement.
-
-> PLs, tools and libraries: `PHP`, `JavaScript`, `Hadoop` (`Hive`, `Pig`), `Sass`, `Compass`, `Sherpa`
-
-##### [Yahoo Mobile Homepage](https://tw.mobi.yahoo.com)
-
-- Developed Search Box and Assist using `React` + `Fluxible`
-- Delivered context-aware default keywords on Search Box
-- Built the Nearby Entry on Search Assist
-
-> PLs, tools and libraries: `React` + `Fluxible`
-
-##### [Yahoo Homepage](https://tw.yahoo.com)
-
-- Taiwan and Hong Kong Header development -- including Search Box, Handwriting and Trending Keywords.
-- Flat and animated Search Button UI design based on data-driven A/B testing results
-
-> PLs, tools and libraries: `React` + `Fluxible`
-
+  - [**Yahoo Homepage**](https://tw.yahoo.com)
+    > `React` + `Fluxible`
+    - Taiwan and Hong Kong Header development -- including Search Box, Handwriting and Trending Keywords.
+    - Flat and animated Search Button UI design based on data-driven A/B testing results
 
 #### Research Assistant @ Academia Sinica, Taipei
 - Nov. 2013 – Dec. 2014
 - Natural Language and Knowledge Processing Lab
 - Advisor: Dr. Lun-Wei Ku
 - Project: [Feelit](http://doraemon.iis.sinica.edu.tw/feelit/)
+
+  > `Python`, `JavaScript`, `d3.js`
+
   - Capturing sentiment and emotion events from web blog posts by learned patterns to benefit opinion analysis and context-aware recommendation.
   - Emotion wheel visualization
-
-> PLs, tools and libraries: `Python`, `JavaScript`, `d3.js`
-
-#### Intern @ ITRI, Hsinchu
-- Dec. 2012 – Apr. 2013
-- Information and Communication Research
-- Project: MovieSearch
-  - Building an intelligent search engine, which supports human language input, to retrieve movies and comments.
-
-> PLs, tools and libraries: `Python`
 
 #### Intern @ Microsoft Research Asia, Beijing
 - Jul. 2012 – Oct. 2012
 - Knowledge Mining by Dr. Chin-Yew Lin
 - NeedleSeek
+
+  > `C#`, `Python`, `JavaScript`, `d3.js`
+  
   -	Web semantic and ontology mining
   -	Social media data visualization
 - Award: Excellence Award of Microsoft Internship Program
 
-> PLs, tools and libraries: `C#`, `Python`, `JavaScript`, `d3.js`
+#### Intern @ ITRI, Hsinchu
+- Dec. 2012 – Apr. 2013
+- Information and Communication Research
+- Project: MovieSearch
+
+  > `Python`
+  
+  - Building an intelligent search engine, which supports human language input, to retrieve movies and comments.
 
 #### Research Assistant @ NTHU, Hsinchu
 - Aug. 2011 – Jun. 2012
 - Advisor: Dr. Jason S. Chang and Dr. Chin-Tay Shih
 - Project: iSpin
-  - Working with MIRLab to build an interactive language learning system, TELL, which leverages TED Talks resources to provide accurate word/sentence pronunciation.
 
-> PLs, tools and libraries: `Python`, `JavaScript`
+  > `Python`, `JavaScript`
+  
+  - Working with MIRLab to build an interactive language learning system, TELL, which leverages TED Talks resources to provide accurate word/sentence pronunciation.
 
 #### Research Assistant @ NHCUE, Hsinchu
 - Advisor: Dr. Han-Chun Huang
-- Works: Developing an fast looking up interface for several Hakka corpora in several researches
+- Works: 
 
-> PLs, tools and libraries: `Python`
+  > `Python`
+  
+  - Developing an fast looking up interface for several Hakka corpora in several researches
 
 ## PUBLICATIONS
 
