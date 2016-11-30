@@ -41,10 +41,10 @@
 
 ##### [Web Search](https://tw.search.yahoo.com/search?p=maxiskao)
 
-- Mainly focus on front-end development of the Search product across 40+ international markets.
-- Data-driven UI optimization based on large-scale A/B testing results. (millions of users per bucket)
-- Platform redesign: migrating the Search Front-end from PHP + YUI to Node + React + Fluxible to boost development process and keep the product more maintainable.
-- Experienced in test automation, including unit / functional tests and release pipeline.
+- Mainly focus on front-end development of the Search product across *40+ international markets*.
+- Data-driven UI optimization based on large-scale **A/B testing** results. (millions of users per bucket)
+- Platform redesign: migrating the Search Front-end from `PHP` + `YUI` to `Node` + `React` + `Fluxible` to boost development process and keep the product more maintainable.
+- Experienced in **test automation**, including unit / functional tests and release **pipeline**.
 
 > PLs, tools and libraries: `PHP`, `Node.js`, `YUI`, `React`/`Fluxible`, `webpack`, `selenium`, `jenkins`
 
@@ -59,9 +59,9 @@
 
 ##### [Yahoo Mobile Homepage](https://tw.mobi.yahoo.com)
 
-- Developed Search Box and Assist using React + Fluxible
-- Context-aware default keyword on Search Box
-- Nearby Entry on Search Assist
+- Developed Search Box and Assist using `React` + `Fluxible`
+- Delivered context-aware default keywords on Search Box
+- Built the Nearby Entry on Search Assist
 
 > PLs, tools and libraries: `React` + `Fluxible`
 
