@@ -28,15 +28,15 @@
   - 2016 *Winner* of Yahoo Bot Challenge
 
 - **Volunteering Experience**
-  - 2016 Yahoo Summer Intern Program
+  - *2016 Yahoo Summer Intern Program*
     - role: mentor
     - responsibility: to guide and discuss ideas with summer interns
-    - achievement: won the *Best of Intern Award*
-  - 2016 Yahoo Mentorship Program
+    - achievement: helped interns won the *Best of Intern Award*
+  - *2016 Yahoo Mentorship Program*
     - role: mentor
     - responsibility: to share the front-end knowledge with two mentees
     - achievement: [Front-end 101 series](http://www.slideshare.net/maxiskao/frontend-101-javascript-oop)
-  - 2016 Yahoo Employee Welfare Committee
+  - *2016 Yahoo Employee Welfare Committee*
     - responsibility: to hold the 2016 TW Yahoo Summer Party
 
 - **Projects**
