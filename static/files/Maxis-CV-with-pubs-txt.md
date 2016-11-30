@@ -22,12 +22,55 @@
 
 #### Software Engineer @ Yahoo!, Taipei
 - Dec. 2014 - Current
-- Search Team / Front-End development
-- Products: [Yahoo! front page](http://tw.yahoo.com), [Mobile Theme](http://yahoosearchtheme.tumblr.com/) and [TW/HK Search](https://goo.gl/eBNrOr)
-- Mainly focus on font-end development, including UI optimization, platform redesign, TW/HK initiatives (Mobile Theme and Nearby), and data analytics
+
 - Awards:
   - 2015 Top Hack of Yahoo TW/JP Joint Hackday
   - 2016 Winner of Yahoo Bot Challenge
+
+- Volunteering Experience
+  - 2016 Yahoo Summer Intern Program
+    - role: mentor
+    - responsibility: to guide and discuss ideas with summer interns
+    - achievement: won the *Best of Intern Award*
+  - 2016 Yahoo Mentorship Program
+    - role: mentor
+    - responsibility: to share the front-end knowledge with two mentees
+    - achievement: [Front-end 101 series](http://www.slideshare.net/maxiskao/frontend-101-javascript-oop)
+  - 2016 Yahoo Employee Welfare Committee
+    - responsibility: to hold the 2016 TW Yahoo Summer Party
+
+##### [Web Search](https://tw.search.yahoo.com/search?p=maxiskao)
+
+- Mainly focus on front-end development of the Search product across 40+ international markets.
+- Data-driven UI optimization based on large-scale A/B testing results. (millions of users per bucket)
+- Platform redesign: migrating the Search Front-end from PHP + YUI to Node + React + Fluxible to boost development process and keep the product more maintainable.
+- Experienced in test automation, including unit / functional tests and release pipeline.
+
+> PLs, tools and libraries: `PHP`, `Node.js`, `YUI`, `React`/`Fluxible`, `webpack`, `selenium`, `jenkins`
+> software development: `agile`, `scrum`, `sprint`
+
+##### [Mobile Theme](http://yahoosearchtheme.tumblr.com/)
+
+- A Taiwan / Hong Kong initiative that effectively improves the user engagement by more than 50%.
+- Data analytics: leverage Apache Hive and Pig to analyze large data sets and extract product key metric from query logs for UI enhancement.
+
+> PLs, tools and libraries: `PHP`, `JavaScript`, `Hadoop` (`Hive`, `Pig`), `Sass`, `Compass`, `Sherpa`
+
+##### [Yahoo Mobile Homepage](https://tw.mobi.yahoo.com)
+
+- Developed Search Box and Assist using React + Fluxible
+- Context-aware default keyword on Search Box
+- Nearby Entry on Search Assist
+
+> PLs, tools and libraries: `React` + `Fluxible`
+
+##### [Yahoo Homepage](https://tw.yahoo.com)
+
+- Taiwan and Hong Kong Header development -- including Search Box, Handwriting and Trending Keywords.
+- Flat and animated Search Button UI design based on data-driven A/B testing results
+
+> PLs, tools and libraries: `React` + `Fluxible`
+
 
 #### Research Assistant @ Academia Sinica, Taipei
 - Nov. 2013 – Dec. 2014
@@ -37,12 +80,15 @@
   - Capturing sentiment and emotion events from web blog posts by learned patterns to benefit opinion analysis and context-aware recommendation.
   - Emotion wheel visualization
 
+> PLs, tools and libraries: `Python`, `JavaScript`, `d3.js`
 
 #### Intern @ ITRI, Hsinchu
 - Dec. 2012 – Apr. 2013
 - Information and Communication Research
 - Project: MovieSearch
   - Building an intelligent search engine, which supports human language input, to retrieve movies and comments.
+
+> PLs, tools and libraries: `Python`
 
 #### Intern @ Microsoft Research Asia, Beijing
 - Jul. 2012 – Oct. 2012
@@ -52,15 +98,21 @@
   -	Social media data visualization
 - Award: Excellence Award of Microsoft Internship Program
 
+> PLs, tools and libraries: `C#`, `Python`, `JavaScript`, `d3.js`
+
 #### Research Assistant @ NTHU, Hsinchu
 - Aug. 2011 – Jun. 2012
 - Advisor: Dr. Jason S. Chang and Dr. Chin-Tay Shih
 - Project: iSpin
   - Working with MIRLab to build an interactive language learning system, TELL, which leverages TED Talks resources to provide accurate word/sentence pronunciation.
 
+> PLs, tools and libraries: `Python`, `JavaScript`
+
 #### Research Assistant @ NHCUE, Hsinchu
 - Advisor: Dr. Han-Chun Huang
 - Works: Developing an fast looking up interface for several Hakka corpora in several researches
+
+> PLs, tools and libraries: `Python`
 
 ## PUBLICATIONS
 
