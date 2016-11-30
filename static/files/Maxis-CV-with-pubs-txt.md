@@ -39,7 +39,7 @@
   - 2016 Yahoo Employee Welfare Committee
     - responsibility: to hold the 2016 TW Yahoo Summer Party
 
-- Projects
+- **Projects**
   - [**Web Search**](https://tw.search.yahoo.com/search?p=maxiskao)
     > `PHP`, `Node.js`, `YUI`, `React`/`Fluxible`, `webpack`, `selenium`, `jenkins`
     
@@ -61,7 +61,7 @@
     - Built the Nearby Entry on Search Assist
 
   - [**Yahoo Homepage**](https://tw.yahoo.com)
-    > `React` + `Fluxible`
+    > `Node.js`, `YUI`
     - Taiwan and Hong Kong Header development -- including Search Box, Handwriting and Trending Keywords.
     - Flat and animated Search Button UI design based on data-driven A/B testing results
 
