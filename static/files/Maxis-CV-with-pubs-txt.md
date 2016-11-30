@@ -1,5 +1,5 @@
 
-# TING-HUI (Maxis) KAO 
+# Maxis Kao
 
 * maxis1718@gmail.com 
 * [+886-905-302-661](tel:+886-905-302-661)
