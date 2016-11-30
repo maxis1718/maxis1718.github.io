@@ -47,7 +47,8 @@
 - Experienced in test automation, including unit / functional tests and release pipeline.
 
 > PLs, tools and libraries: `PHP`, `Node.js`, `YUI`, `React`/`Fluxible`, `webpack`, `selenium`, `jenkins`
-> software development: `agile`, `scrum`, `sprint`
+
+> software development: `agile`, `scrum`, `sprint`, `kaban`
 
 ##### [Mobile Theme](http://yahoosearchtheme.tumblr.com/)
 
