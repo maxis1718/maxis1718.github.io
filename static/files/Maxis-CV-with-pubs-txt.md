@@ -23,11 +23,11 @@
 #### Software Engineer @ Yahoo!, Taipei
 - Dec. 2014 - Current
 
-- Awards:
-  - 2015 Top Hack of Yahoo TW/JP Joint Hackday
-  - 2016 Winner of Yahoo Bot Challenge
+- **Awards**:
+  - 2015 *Top Hack* of Yahoo TW/JP Joint Hackday
+  - 2016 *Winner* of Yahoo Bot Challenge
 
-- Volunteering Experience
+- **Volunteering Experience**
   - 2016 Yahoo Summer Intern Program
     - role: mentor
     - responsibility: to guide and discuss ideas with summer interns
