@@ -8,7 +8,10 @@
         <td id="profile-right">
             <ul>
                 <li>
-                    I work at Yahoo!
+                    I work at Shopee
+                </li>
+                <li>
+                    I worked at Yahoo!
                 </li>
                 <li>
                     I was a Research Assistant in
