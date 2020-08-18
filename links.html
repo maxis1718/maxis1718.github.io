@@ -1,0 +1,92 @@
+<html>
+  <head>
+    <!-- https://wa.me/6594498294?text=kerkerker -->
+    <title>WhatsApp Link Generator</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+      id="mobile-viewport"
+    />
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <style type="text/css">
+      body {
+        padding: 1.5em;
+        font-size: 16px;
+        font-family: Verdana, Arial, Helvetica;
+        background-color: #f5f5f5;
+      }
+      .input-header {
+        padding-bottom: 0.5em;
+        font-size: 14px;
+      }
+      div {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+      }
+      .input-box {
+        padding: 8px;
+        font-size: 18px;
+        border-radius: 3px;
+        border: 2px solid #ddd;
+        outline: none;
+        transition: all 0.2s;
+        font-family: sans-serif;
+      }
+      .input-box:focus {
+        border: 2px solid #6200ee;
+      }
+      #phone-number {
+        letter-spacing: 1px;
+      }
+      .section {
+        margin-bottom: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="section">
+      <div class="input-header">Phone number</div>
+      <input
+        id="phone-number"
+        class="input-box"
+        placeholder="6594498294"
+        type="tel"
+        autofocus
+      />
+    </div>
+    <div class="section">
+      <div class="input-header">Message</div>
+      <textarea
+        id="message"
+        class="input-box"
+        type="text"
+        rows="3"
+        placeholder="Hi there!"
+      ></textarea>
+    </div>
+    <div>
+      <a href="" id="whatsapp-link">
+        <img src="./assets/WhatsApp.png" width="72" />
+      </a>
+    </div>
+    <script>
+      const phoneNumber = document.getElementById("phone-number");
+      const link = document.getElementById("whatsapp-link");
+      const message = document.getElementById("message");
+      const sanitize = (rawPhoneNumber) => {
+        return rawPhoneNumber.replace("+", "").replace(/-/gi, "").trim();
+      };
+      const updateLink = () => {
+        const sanitizedPhoneNumber = sanitize(phoneNumber.value);
+        if (!sanitizedPhoneNumber) {
+          link.href = "#";
+        } else {
+          link.href = `https://wa.me/${sanitizedPhoneNumber}?text=${message.value}`;
+        }
+      };
+      phoneNumber.addEventListener("keyup", updateLink);
+      message.addEventListener("keyup", updateLink);
+    </script>
+  </body>
+</html>
