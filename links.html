@@ -7,7 +7,10 @@
       content="width=device-width, initial-scale=1.0"
       id="mobile-viewport"
     />
+    <meta charset="UTF-8" />
+    <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.20/lodash.min.js"></script>
     <style type="text/css">
       body {
         padding: 1.5em;
@@ -28,6 +31,7 @@
         transition: all 0.2s;
         font-family: sans-serif;
         margin: 0;
+        flex: 1;
       }
       .input-box:focus {
         border: 2px solid #6200ee;
@@ -41,6 +45,17 @@
         flex: 1;
         flex-direction: column;
         justify-content: center;
+      }
+      .row {
+        display: flex;
+        display: -webkit-flex;
+      }
+      #template-picker {
+        width: 64px;
+        font-size: 1.5em;
+      }
+      textarea.input-box {
+        min-height: 64px;
       }
     </style>
   </head>
@@ -65,8 +80,17 @@
         placeholder="Hi there!"
       ></textarea>
     </div>
+    <div class="section">
+      <div class="input-header">Template</div>
+      <div class="row">
+        <button id="template-picker">▲</button>
+        <textarea id="template" class="input-box" type="text" rows="3">
+Hi Andrea, how do you durn this on?</textarea
+        >
+      </div>
+    </div>
     <div>
-      <a href="" id="whatsapp-link">
+      <a href="" id="whatsapp-link" target="_blank">
         <img src="./assets/WhatsApp.png" width="72" />
       </a>
     </div>
@@ -74,9 +98,21 @@
       const phoneNumber = document.getElementById("phone-number");
       const link = document.getElementById("whatsapp-link");
       const message = document.getElementById("message");
+      const template = document.getElementById("template");
+      const templatePicker = document.querySelector("#template-picker");
+
+      // Load template from local storage
+      const LOCAL_STORAGE_KEY = "@krixi.whatsapp.template";
+      const localStorage = window.localStorage;
+      const savedTemplate = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedTemplate) {
+        template.value = savedTemplate;
+      }
+
       const sanitize = (rawPhoneNumber) => {
         return rawPhoneNumber.replace("+", "").replace(/-/gi, "").trim();
       };
+
       const updateLink = () => {
         const sanitizedPhoneNumber = sanitize(phoneNumber.value);
         if (!sanitizedPhoneNumber) {
@@ -85,8 +121,31 @@
           link.href = `https://wa.me/${sanitizedPhoneNumber}?text=${message.value}`;
         }
       };
+
+      // save template to local storage when value changed
+      const updateTemplate = () => {
+        if (template.value) {
+          localStorage.setItem(LOCAL_STORAGE_KEY, template.value);
+        }
+      };
+      const _debouncedUpdateTempalte = _.debounce(updateTemplate, 500);
+
+      const useTemplate = () => {
+        message.value = template.value;
+      };
+
+      const validateLink = (event) => {
+        if (!phoneNumber.value) {
+          event.preventDefault();
+          alert("Please input Phone number");
+        }
+      };
+
       phoneNumber.addEventListener("keyup", updateLink);
       message.addEventListener("keyup", updateLink);
+      template.addEventListener("keyup", _debouncedUpdateTempalte);
+      templatePicker.addEventListener("click", useTemplate);
+      link.addEventListener("click", validateLink);
     </script>
   </body>
 </html>
