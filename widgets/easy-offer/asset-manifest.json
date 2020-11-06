@@ -1,21 +1,21 @@
 {
   "files": {
-    "main.css": "/static/css/main.ab7136cd.chunk.css",
-    "main.js": "/static/js/main.a7cd2ece.chunk.js",
-    "main.js.map": "/static/js/main.a7cd2ece.chunk.js.map",
-    "runtime-main.js": "/static/js/runtime-main.711da503.js",
-    "runtime-main.js.map": "/static/js/runtime-main.711da503.js.map",
-    "static/js/2.dfec85e9.chunk.js": "/static/js/2.dfec85e9.chunk.js",
-    "static/js/2.dfec85e9.chunk.js.map": "/static/js/2.dfec85e9.chunk.js.map",
-    "static/js/3.730ea00c.chunk.js": "/static/js/3.730ea00c.chunk.js",
-    "static/js/3.730ea00c.chunk.js.map": "/static/js/3.730ea00c.chunk.js.map",
-    "index.html": "/index.html",
-    "static/css/main.ab7136cd.chunk.css.map": "/static/css/main.ab7136cd.chunk.css.map",
-    "static/js/2.dfec85e9.chunk.js.LICENSE.txt": "/static/js/2.dfec85e9.chunk.js.LICENSE.txt",
-    "static/media/logo.103b5fa1.svg": "/static/media/logo.103b5fa1.svg"
+    "main.css": "/widgets/easy-offer/static/css/main.ab7136cd.chunk.css",
+    "main.js": "/widgets/easy-offer/static/js/main.a7cd2ece.chunk.js",
+    "main.js.map": "/widgets/easy-offer/static/js/main.a7cd2ece.chunk.js.map",
+    "runtime-main.js": "/widgets/easy-offer/static/js/runtime-main.c01accc1.js",
+    "runtime-main.js.map": "/widgets/easy-offer/static/js/runtime-main.c01accc1.js.map",
+    "static/js/2.dfec85e9.chunk.js": "/widgets/easy-offer/static/js/2.dfec85e9.chunk.js",
+    "static/js/2.dfec85e9.chunk.js.map": "/widgets/easy-offer/static/js/2.dfec85e9.chunk.js.map",
+    "static/js/3.730ea00c.chunk.js": "/widgets/easy-offer/static/js/3.730ea00c.chunk.js",
+    "static/js/3.730ea00c.chunk.js.map": "/widgets/easy-offer/static/js/3.730ea00c.chunk.js.map",
+    "index.html": "/widgets/easy-offer/index.html",
+    "static/css/main.ab7136cd.chunk.css.map": "/widgets/easy-offer/static/css/main.ab7136cd.chunk.css.map",
+    "static/js/2.dfec85e9.chunk.js.LICENSE.txt": "/widgets/easy-offer/static/js/2.dfec85e9.chunk.js.LICENSE.txt",
+    "static/media/logo.103b5fa1.svg": "/widgets/easy-offer/static/media/logo.103b5fa1.svg"
   },
   "entrypoints": [
-    "static/js/runtime-main.711da503.js",
+    "static/js/runtime-main.c01accc1.js",
     "static/js/2.dfec85e9.chunk.js",
     "static/css/main.ab7136cd.chunk.css",
     "static/js/main.a7cd2ece.chunk.js"
