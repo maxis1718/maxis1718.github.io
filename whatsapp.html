@@ -24,36 +24,48 @@
     <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.20/lodash.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fira+Sans:ital@0;1&family=Fjalla+One&display=swap"
+      rel="stylesheet"
+    />
+
     <style type="text/css">
       body {
-        padding: 1.5em;
+        padding: 2.5em 18px 2.5em 5px;
         font-size: 16px;
-        font-family: Verdana, Arial, Helvetica;
         background-color: #f5f5f5;
+        font-family: "Fira Sans", sans-serif;
       }
       .input-header {
         padding-bottom: 0.5em;
         font-size: 14px;
+        color: #666;
+        font-style: italic;
       }
       .input-box {
-        padding: 8px;
+        display: block;
+        width: 100%;
         font-size: 18px;
-        border-radius: 3px;
-        border: 2px solid #ddd;
+        line-height: 2em;
+        font-family: "Fjalla One", sans-serif;
+        border: none;
+        border-bottom: 5px solid rgba(0, 0, 0, 1);
+        background: #f8f4e5;
+        min-width: 250px;
+        padding-left: 5px;
         outline: none;
-        transition: all 0.2s;
-        font-family: sans-serif;
-        margin: 0;
-        flex: 1;
+        color: rgba(0, 0, 0, 1);
       }
       .input-box:focus {
-        border: 2px solid #6200ee;
+        border-bottom: 5px solid #ffa580;
       }
       #phone-number {
         letter-spacing: 1px;
       }
       .section {
-        margin-bottom: 1em;
+        margin-bottom: 2.5em;
         display: flex;
         flex: 1;
         flex-direction: column;
@@ -63,49 +75,109 @@
         display: flex;
         display: -webkit-flex;
       }
+      .button {
+        display: block;
+        line-height: 2em;
+        padding: 0 20px;
+        background: #ffa580;
+        letter-spacing: 2px;
+        transition: 0.1s all ease-in-out;
+        outline: none;
+        border: 1px solid rgba(0, 0, 0, 1);
+        box-shadow: 3px 3px 1px #f8f4e5, 3px 3px 1px 1px rgba(0, 0, 0, 1);
+        font-family: "Fjalla One", sans-serif;
+        font-size: 1em;
+      }
+      .button:hover {
+        background: rgba(0, 0, 0, 1);
+        color: white;
+        border: 1px solid rgba(0, 0, 0, 1);
+      }
+      #whatsapp-link {
+        text-decoration: none;
+      }
+      #whatsapp-link .button {
+        width: 180px;
+        height: 40px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
       #template-picker {
-        width: 64px;
-        font-size: 1.5em;
+        width: 180px;
+        height: 35px;
       }
       textarea.input-box {
         min-height: 64px;
       }
+      #app {
+        max-width: 720px;
+        margin: 0 auto;
+        background: #f8f4e5;
+        padding: 3em;
+        border: 2px solid black;
+        box-shadow: 15px 15px 1px #ffa580, 15px 15px 1px 2px black;
+      }
+      label {
+        padding-top: 0.3em;
+        padding-right: 0.3em;
+      }
     </style>
   </head>
   <body>
-    <div class="section">
-      <div class="input-header">Phone number</div>
-      <input
-        id="phone-number"
-        class="input-box"
-        placeholder="6594498294"
-        type="tel"
-        autofocus
-      />
-    </div>
-    <div class="section">
-      <div class="input-header">Message</div>
-      <textarea
-        id="message"
-        class="input-box"
-        type="text"
-        rows="3"
-        placeholder="Hi there!"
-      ></textarea>
-    </div>
-    <div class="section">
-      <div class="input-header">Template</div>
-      <div class="row">
-        <button id="template-picker">▲</button>
-        <textarea id="template" class="input-box" type="text" rows="3">
-Hi Andrea, how do you durn this on?</textarea
-        >
+    <div id="app">
+      <div class="section">
+        <div class="row">
+          <label>📞</label>
+          <input
+            id="phone-number"
+            autofocus
+            class="input-box"
+            placeholder="6595279527"
+            type="tel"
+            autofocus
+          />
+        </div>
       </div>
-    </div>
-    <div>
-      <a href="" id="whatsapp-link" target="_blank">
-        <img src="./assets/WhatsApp.png" width="72" />
-      </a>
+      <div class="section">
+        <div class="row">
+          <label>💬</label>
+          <textarea
+            id="message"
+            class="input-box"
+            type="text"
+            rows="3"
+            placeholder="Message"
+          ></textarea>
+        </div>
+        <div
+          style="
+            display: flex;
+            justify-content: flex-end;
+            margin: 0.5em 0.5em 0 0;
+          "
+        >
+          <button id="template-picker" class="button">⬆ Use template</button>
+        </div>
+      </div>
+      <div class="section" style="margin-bottom: 1.5em">
+        <div class="row">
+          <label>📝</label>
+          <textarea id="template" class="input-box" type="text" rows="3">
+Hi Andrea, how do you durn this on?</textarea
+          >
+        </div>
+      </div>
+      <div
+        style="display: flex; justify-content: flex-end; margin: 1em 0.5em 0 0"
+      >
+        <a href="" id="whatsapp-link" target="_blank">
+          <button class="button">
+            <img src="./assets/WhatsApp.png" width="32" />
+            Let's go
+          </button>
+        </a>
+      </div>
     </div>
     <script>
       let sanitizedPhoneNumber = "";
