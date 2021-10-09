@@ -218,11 +218,10 @@ Hi Andrea, how do you durn this on?</textarea
           localStorage.setItem(LOCAL_STORAGE_KEY, template.value);
         }
       };
-      const _debouncedUpdateTempalte = _.debounce(updateTemplate, 500);
+      const _debouncedUpdateTemplate = _.debounce(updateTemplate, 500);
 
       const useTemplate = () => {
         message.value = template.value;
-        updateLink();
       };
 
       const validateLink = (event) => {
@@ -232,9 +231,9 @@ Hi Andrea, how do you durn this on?</textarea
         }
       };
 
-      phoneNumber.addEventListener("keyup", updateLink);
-      message.addEventListener("keyup", updateLink);
-      template.addEventListener("keyup", _debouncedUpdateTempalte);
+      phoneNumber.addEventListener("change", updateLink);
+      message.addEventListener("change", updateLink);
+      template.addEventListener("keyup", _debouncedUpdateTemplate);
       templatePicker.addEventListener("click", useTemplate);
       link.addEventListener("click", validateLink);
     </script>
