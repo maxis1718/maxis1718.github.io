@@ -1,0 +1,16 @@
+{
+  "files": {
+    "main.css": "/static/css/main.b747aa01.css",
+    "main.js": "/static/js/main.291372ed.js",
+    "static/js/453.96bd7ddd.chunk.js": "/static/js/453.96bd7ddd.chunk.js",
+    "static/media/DeliciousHandrawn-Regular.ttf": "/static/media/DeliciousHandrawn-Regular.f566990bf4d20f0c385c.ttf",
+    "index.html": "/index.html",
+    "main.b747aa01.css.map": "/static/css/main.b747aa01.css.map",
+    "main.291372ed.js.map": "/static/js/main.291372ed.js.map",
+    "453.96bd7ddd.chunk.js.map": "/static/js/453.96bd7ddd.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.b747aa01.css",
+    "static/js/main.291372ed.js"
+  ]
+}
