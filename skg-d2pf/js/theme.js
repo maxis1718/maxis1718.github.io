@@ -7,19 +7,19 @@
 
 export const STYLE = {
   // ── Architecture ──────────────────────────────────────────────────────────
-  wall:        { color: '#efebe4', roughness: 0.93, plasterNoise: 0.018 },   // matte warm white paint
-  facade:      { color: '#e3ded5', roughness: 0.9 },                          // exterior / balcony wall paint
+  wall:        { color: '#e6dfd4', roughness: 0.93, plasterNoise: 0.018 },   // matte, very light warm greige
+  facade:      { color: '#ddd6cb', roughness: 0.9 },                          // exterior / balcony wall paint
   wallCap:     { color: '#3b3a38', roughness: 0.9 },                          // wall tops seen in overview (poché)
-  ceiling:     { color: '#f7f6f3', roughness: 0.96 },
+  ceiling:     { color: '#fbfaf7', roughness: 0.96 },                          // whiter than walls
   bathWall:    { color: '#e9e6e0', grout: '#d6d1c8', tileW: 0.60, tileH: 0.30, roughness: 0.35 }, // large-format wall tile
-  skirting:    { color: '#e6e1d8', h: 0.08, t: 0.012, roughness: 0.6 },
+  skirting:    { color: '#9d907f', h: 0.08, t: 0.012, roughness: 0.55 },     // taupe accent so wall bases read
   sill:        { color: '#e4e0d8', roughness: 0.45 },                         // window sill board (stone)
   slab:        { color: '#9c988f', roughness: 0.95 },                         // floor slab edge (overview)
 
   // ── Floors (key = PLAN room.floor) ────────────────────────────────────────
   floors: {
-    wood:    { kind: 'oak',   color: '#cfae84', color2: '#b8946a', plankW: 0.19, plankL: 1.8, roughness: 0.55 },
-    tile:    { kind: 'tile',  color: '#dcdad5', color2: '#cfccc6', grout: '#c4c0b8', tileW: 0.60, tileH: 0.60, vein: 0.05, roughness: 0.22 },
+    wood:    { kind: 'oak',   color: '#bb8e5e', color2: '#9b7047', plankW: 0.19, plankL: 1.8, roughness: 0.5 },   // richer mid-tone oak
+    tile:    { kind: 'tile',  color: '#d5cec2', color2: '#c8c0b3', grout: '#b2aa9c', tileW: 0.60, tileH: 0.60, vein: 0.11, roughness: 0.2 },
     bath:    { kind: 'tile',  color: '#c9c5bd', color2: '#bdb8af', grout: '#aaa59b', tileW: 0.30, tileH: 0.30, vein: 0.02, roughness: 0.45 },
     balcony: { kind: 'stone', color: '#bdb6aa', color2: '#a9a296', grout: '#958f84', tileW: 0.60, tileH: 0.60, roughness: 0.85 },
     service: { kind: 'stone', color: '#c2bcb1', color2: '#b0a99d', grout: '#9a948a', tileW: 0.30, tileH: 0.30, roughness: 0.8 },
@@ -33,7 +33,7 @@ export const STYLE = {
   railing:     { glassColor: '#cfe0e3', glassOpacity: 0.2, metal: '#55575a', barW: 0.02, barGap: 0.11 },
   door:        { color: '#d9c3a0', grain: '#c3a77f', roughness: 0.55 },        // light oak veneer leaves
   mainDoor:    { color: '#7a5a3e', grain: '#664a31', roughness: 0.5 },          // walnut entrance door
-  doorFrame:   { color: '#ece7de', roughness: 0.6 },
+  doorFrame:   { color: '#9d907f', roughness: 0.55 },                         // taupe frames/architraves
   handle:      { color: '#2f2f30', roughness: 0.35, metalness: 0.9 },
   slideOpaque: { color: '#ece8e1', roughness: 0.6 },                            // pocket door (non-glass)
 
@@ -69,17 +69,18 @@ export const STYLE = {
 export const THEMES = {
   day: {
     name: 'day',
-    exposure: 1.05,
-    sky:    { top: '#5d8fc9', horizon: '#cfe0ec', bottom: '#e9eef0' },
+    exposure: 0.94,
+    sky:    { top: '#4f86c6', horizon: '#cfe0ec', bottom: '#e9eef0' },
     fog:    { color: '#d3e0ea', near: 40, far: 650 },
-    sun:    { color: '#ffe7c4', intensity: 3.4, dir: [-0.36, 0.62, -0.70] },     // dir = toward the sun (north-west, ~38° up)
-    hemi:   { sky: '#dfeaf5', ground: '#c9b79c', intensity: 0.55 },
-    envIntensity: 0.68,
+    sun:    { color: '#ffd29a', intensity: 6.5, dir: [-0.38, 0.50, -0.78] },     // dir = toward the sun (north-west, ~30° up) — warm key
+    hemi:   { sky: '#a9c4ea', ground: '#b49a7b', intensity: 0.8 },              // cool sky fill vs warm sun
+    envIntensity: 0.4,
     downlight: { color: '#fff4e2', intensity: 0.9, glow: 0.0 },
     interior: { color: '#ffd9a8', intensity: 0, distance: 6.0 },                  // real point lights (evening only)
     cityWindows: 0.0,
     ground: 1.0,
     groundColor: null,      // null = STYLE.ground.color
+    overviewBg: null,       // null = show ground/city behind the dollhouse; or [top, mid, bottom] screen gradient
     lampGlow: 0.5,          // multiplier on furniture emissive (pendants / lamps)
   },
   evening: {
@@ -95,6 +96,7 @@ export const THEMES = {
     cityWindows: 1.0,
     ground: 1.0,
     groundColor: '#1a2132',
+    overviewBg: ['#0b1630', '#2b3b63', '#5a5675'],   // dusk gradient (matches evening sky)
     lampGlow: 1.6,
   },
 };

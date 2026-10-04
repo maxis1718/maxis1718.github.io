@@ -24,7 +24,7 @@ export const DEFAULT_PALETTE = {
   accent: '#b97c58',     // terracotta cushion
   accent2: '#8f9b82',    // sage
   ceramic: '#f7f6f3',
-  worktop: '#eeece8',    // quartz
+  worktop: '#f2f0ec',    // white quartz (veined texture)
   stone: '#dcd7cf',
   glass: '#dde9e8',
   leaf: '#557a42',
@@ -42,6 +42,10 @@ export const DEFAULT_PALETTE = {
   sheer: '#f6f3ee',
   drape: '#c9bca9',
   frame: '#2a2826',
+  sheerOpacity: 0.3,      // ≤ 0.35
+  kitchenLower: '#c7a479', // oak veneer base units
+  kitchenUpper: '#efebe4', // warm white matte wall units / tall tower
+  kitchenHandle: '#1f1f1f',
   glow: 1.0,             // emissive intensity multiplier
 };
 
@@ -94,10 +98,32 @@ export function fabricTex() {
   return canvasTex('fabric', 256, (g, w, h) => {
     g.fillStyle = '#e8e8e8'; g.fillRect(0, 0, w, h);
     const r = rng(11);
-    for (let y = 0; y < h; y += 2) { const v = 215 + r() * 40 | 0; g.fillStyle = `rgba(${v},${v},${v},0.55)`; g.fillRect(0, y, w, 1); }
-    for (let x = 0; x < w; x += 2) { const v = 205 + r() * 45 | 0; g.fillStyle = `rgba(${v},${v},${v},0.45)`; g.fillRect(x, 0, 1, h); }
-    // slubs
-    for (let i = 0; i < 160; i++) { const v = r() < 0.5 ? 190 : 255; g.fillStyle = `rgba(${v},${v},${v},0.35)`; g.fillRect(r() * w, r() * h, 6 + r() * 22, 1.5); }
+    // low-contrast weave (high contrast aliases into a plaid at distance)
+    for (let y = 0; y < h; y += 2) { const v = 228 + r() * 24 | 0; g.fillStyle = `rgba(${v},${v},${v},0.4)`; g.fillRect(0, y, w, 1); }
+    for (let x = 0; x < w; x += 2) { const v = 226 + r() * 26 | 0; g.fillStyle = `rgba(${v},${v},${v},0.3)`; g.fillRect(x, 0, 1, h); }
+    // soft slubs
+    for (let i = 0; i < 90; i++) { const v = r() < 0.5 ? 205 : 255; g.fillStyle = `rgba(${v},${v},${v},0.22)`; g.fillRect(r() * w, r() * h, 6 + r() * 22, 1.5); }
+  });
+}
+export function quartzTex() {
+  return canvasTex('quartz', 1024, (g, w, h) => {
+    g.fillStyle = '#f7f6f3'; g.fillRect(0, 0, w, h);
+    const r = rng(41);
+    for (let i = 0; i < 6000; i++) { const v = 225 + r() * 30 | 0; g.fillStyle = `rgba(${v},${v},${v - 2},0.25)`; g.fillRect(r() * w, r() * h, 2, 2); }
+    // soft grey veins (drawn wrapped so the tile repeats)
+    g.lineCap = 'round';
+    for (let i = 0; i < 7; i++) {
+      const x0 = r() * w, y0 = r() * h, len = 500 + r() * 700, ang = -0.5 + r() * 0.5;
+      for (const pass of [[10, 0.05], [3, 0.12], [1.2, 0.22]]) {
+        g.strokeStyle = `rgba(120,118,115,${pass[1] * (0.6 + r() * 0.6)})`; g.lineWidth = pass[0];
+        for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) {
+          g.beginPath(); g.moveTo(x0 + ox, y0 + oy);
+          let x = x0, y = y0; const rr = rng(i * 97 + 5);
+          for (let t = 0; t < len; t += 20) { x += Math.cos(ang) * 20; y += Math.sin(ang) * 20 + (rr() - 0.5) * 14; g.lineTo(x + ox, y + oy); }
+          g.stroke();
+        }
+      }
+    }
   });
 }
 export function rugTex() {
@@ -137,7 +163,7 @@ function hex(c) { return '#' + new THREE.Color(c).getHexString(); }
  */
 // Opaque kinds share ONE material per (kind, params) and carry their colour as vertex colours, so an item's
 // differently-coloured fabric / wood / paint parts merge into a single mesh (fewer draw calls).
-const VC_KINDS = new Set(['wood', 'paint', 'fabric', 'metal', 'black', 'ceramic', 'gloss']);
+const VC_KINDS = new Set(['wood', 'paint', 'fabric', 'metal', 'black', 'ceramic', 'gloss', 'quartz']);
 export function mat(kind, color, extra = {}) {
   if (VC_KINDS.has(kind)) {
     extra = bucket(kind, extra);
@@ -167,7 +193,8 @@ function baseMat(kind, color, extra, vc) {
   switch (kind) {
     case 'wood': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.6, metalness: 0, map: woodTex() }); worldUV = 0.9; break;
     case 'paint': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.55, metalness: 0 }); break;
-    case 'fabric': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.95, metalness: 0, map: fabricTex() }); worldUV = 0.28; break;
+    case 'fabric': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.95, metalness: 0, map: fabricTex() }); worldUV = 0.35; break;
+    case 'quartz': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.22, metalness: 0, map: quartzTex() }); worldUV = 1.4; break;
     case 'metal': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.32, metalness: 1.0 }); break;
     case 'black': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.5, metalness: 0.35 }); break;
     case 'ceramic': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.1, metalness: 0 }); break;
@@ -178,7 +205,7 @@ function baseMat(kind, color, extra, vc) {
     case 'vc': m = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: extra.rough ?? 0.8, metalness: 0, side: extra.ds ? THREE.DoubleSide : THREE.FrontSide }); break;
     case 'art': m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, map: artTex(extra.v || 0) }); break;
     case 'rug': m = new THREE.MeshStandardMaterial({ ...P, roughness: 1, map: rugTex() }); break;
-    case 'sheer': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.95, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, map: fabricTex() }); worldUV = 0.2; break;
+    case 'sheer': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.95, transparent: true, opacity: Math.min(0.35, extra.opacity ?? 0.3), side: THREE.DoubleSide, depthWrite: false, map: fabricTex() }); worldUV = 0.2; break;
     case 'drape': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.95, side: THREE.DoubleSide, map: fabricTex() }); worldUV = 0.3; break;
     default: m = new THREE.MeshStandardMaterial({ ...P, roughness: extra.rough ?? 0.6, metalness: extra.metal ?? 0 });
   }
@@ -254,6 +281,13 @@ export class Kit {
   /** cylinder along X */
   cylX(material, x, y, z, r, len, seg = 12) {
     this.add(material, cyl(r, r, len, seg), x, y, z, 0, 0, Math.PI / 2);
+  }
+  /** tapered rod from point a=[x,y,z] (radius ra) to b (radius rb) */
+  rod(material, a, b, ra, rb = ra, seg = 8) {
+    const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), dir = B.clone().sub(A), len = dir.length();
+    const qq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    const m = new THREE.Matrix4().compose(A.add(B).multiplyScalar(0.5), qq, new THREE.Vector3(1, 1, 1));
+    this.addM(material, cyl(rb, ra, len, seg), m);
   }
   /** build merged meshes into group */
   build(group, cast = true) {

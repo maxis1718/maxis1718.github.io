@@ -77,7 +77,7 @@ function M(P) { // material shortcuts for a palette
     black: mat('black', P.black), steel: mat('metal', P.steel), chrome: mat('metal', P.chrome, { rough: 0.12 }),
     fabric: mat('fabric', P.fabric), bedding: mat('fabric', P.bedding), pillow: mat('fabric', P.pillow), throw: mat('fabric', P.throw),
     accent: mat('fabric', P.accent), accent2: mat('fabric', P.accent2),
-    ceramic: mat('ceramic', P.ceramic), worktop: mat('paint', P.worktop, { rough: 0.28 }), stone: mat('paint', P.stone, { rough: 0.7 }),
+    ceramic: mat('ceramic', P.ceramic), worktop: mat('quartz', P.worktop), stone: mat('paint', P.stone, { rough: 0.7 }),
     glass: mat('glass', P.glass), appliance: mat('gloss', P.appliance), screen: mat('gloss', P.screen, { rough: 0.12, metal: 0.4 }),
     smoked: mat('gloss', '#1b1e21', { rough: 0.06, metal: 0.3 }), mirror: mat('mirror', '#dfe5e7'),
     glow: mat('emissive', P.lampGlow, { e: P.glow }), led: mat('emissive', '#ffe9cc', { e: 0.9 * P.glow }),
@@ -405,14 +405,21 @@ function plant(K, { w, d, h, o, P, seed }) {
 }
 
 function floor_lamp(K, { w, d, h, P }) {
+  // tripod floor lamp: three slim oak legs, short black stem, compact linen drum shade
   const m = M(P);
-  const H = h, R = Math.min(w, d) / 2;
-  K.add(m.black, cyl(R * 0.62, R * 0.65, 0.022, 28), 0, 0.011, 0);
-  K.add(m.black, cyl(0.009, 0.009, H - 0.3, 8), 0, (H - 0.3) / 2 + 0.02, 0);
-  const sr = R - 0.012;
-  K.add(mat('fabric', P.sheer, { ds: true }), lathe('lampshade' + sr.toFixed(3), [[sr * 0.86, H], [sr, H - 0.32]], 32), 0, 0, 0);
-  K.add(m.glow, cyl(sr * 0.75, sr * 0.75, 0.004, 24), 0, H - 0.29, 0);
-  K.add(m.black, cyl(0.004, 0.004, sr * 1.6, 6), 0, H - 0.3, 0, 0, 0, HP);
+  const H = Math.min(h || 1.6, 1.7), R = Math.min(w, d) / 2;
+  const sr = Math.min(0.2, R - 0.005), sh = 0.24, hub = H - sh - 0.16;
+  const fr = R - 0.02;
+  for (let i = 0; i < 3; i++) {
+    const a = PI / 2 + i * PI * 2 / 3;
+    K.rod(m.oak, [Math.cos(a) * fr, 0, Math.sin(a) * fr], [Math.cos(a) * 0.018, hub, Math.sin(a) * 0.018], 0.011, 0.008, 8);
+    K.add(m.black, cyl(0.012, 0.012, 0.012, 8), Math.cos(a) * fr, 0.006, Math.sin(a) * fr);
+  }
+  K.add(m.black, cyl(0.022, 0.026, 0.05, 12), 0, hub, 0);
+  K.add(m.black, cyl(0.007, 0.007, H - sh - hub + 0.02, 8), 0, (hub + H - sh) / 2 + 0.01, 0);
+  K.add(mat('fabric', P.sheer, { ds: true }), lathe('lampshade2' + sr.toFixed(3), [[sr, H - sh], [sr * 0.86, H]], 32), 0, 0, 0);
+  K.add(m.black, cyl(0.004, 0.004, sr * 1.7, 6), 0, H - 0.02, 0, 0, 0, HP);
+  K.add(m.glow, cyl(sr * 0.7, sr * 0.7, 0.004, 24), 0, H - sh + 0.03, 0);
 }
 
 function pendant(K, { w, d, o, P }) {
@@ -461,7 +468,7 @@ function curtain(K, { w, d, h, o, P }) {
     K.add(matl, g, x0 + len / 2, (top - 0.035 + bottom) / 2, z);
   };
   // sheer (window side, -Z) full width
-  folds(w - 0.02, 0.02, 0.17, -d / 2 + 0.04, mat('sheer', P.sheer), -w / 2 + 0.01);
+  if (o.sheer !== false) folds(w - 0.02, 0.02, 0.17, -d / 2 + 0.04, mat('sheer', P.sheer, { opacity: P.sheerOpacity }), -w / 2 + 0.01);
   // drapes stacked open at both ends (room side, +Z)
   const dw = Math.min(0.42, w * 0.18);
   folds(dw, 0.032, 0.13, d / 2 - 0.042, mat('drape', P.drape), -w / 2 + 0.01);
@@ -634,15 +641,20 @@ function counter(K, { w, d, h, o, P }) {
   const m = M(P);
   const W = w, D = d, H = h || 0.9;
   const island = !!o.island;
-  const topT = island ? 0.05 : 0.04, plinth = 0.1;
-  const zf = D / 2 - (island ? 0.03 : 0.028);           // front face of doors
-  const zb = island ? -D / 2 + 0.03 : -D / 2;            // back of carcass
-  const xL = island ? -W / 2 + topT : -W / 2, xR = island ? W / 2 - topT : W / 2;
+  const low = mat('wood', P.kitchenLower), up = mat('paint', P.kitchenUpper, { rough: 0.85 });
+  const top = mat('quartz', P.worktop), handle = mat('black', P.kitchenHandle);
+  const topT = 0.04, plinth = 0.1;
+  const zf = D / 2 - 0.028;                          // door faces; slim bar handles end flush with the worktop edge
+  const ov = island ? 0.025 : 0;                     // island: 25 mm quartz overhang on the dining (-Z) side
+  const zb = island ? -D / 2 + ov + 0.018 : -D / 2;  // back of carcass (island: behind the finished back panel)
+  const xL = -W / 2, xR = W / 2;
   const fy0 = plinth, fy1 = H - topT;
-  // carcass (dark → shadow gaps), plinth
+  // carcass (dark → shadow gaps), recessed plinth, oak end panels
   K.box(m.carcass, xL + 0.018, xR - 0.018, plinth, fy1, zb, zf - 0.018);
-  K.box(m.carcass, xL + 0.03, xR - 0.03, 0, plinth, zb + (island ? 0.05 : 0), zf - 0.07);
-  if (!island) { K.box(m.cab, xL, xL + 0.018, 0, fy1, zb, zf); K.box(m.cab, xR - 0.018, xR, 0, fy1, zb, zf); }
+  K.box(m.carcass, xL + 0.04, xR - 0.04, 0, plinth, island ? zb + 0.04 : zb, zf - 0.07);
+  K.box(low, xL, xL + 0.018, 0, fy1, island ? -D / 2 + ov : zb, zf, 0.0015, 1);
+  K.box(low, xR - 0.018, xR, 0, fy1, island ? -D / 2 + ov : zb, zf, 0.0015, 1);
+  if (island) K.box(low, xL + 0.018, xR - 0.018, plinth, fy1, -D / 2 + ov, zb, 0.0015, 1); // clean finished back panel
   // ---- module layout along X
   const mods = [];
   const sinkX = o.sink, hobX = o.hob;
@@ -664,16 +676,15 @@ function counter(K, { w, d, h, o, P }) {
   };
   for (const s of special) { fill(cur, s.x0); mods.push(s); cur = s.x1; }
   fill(cur, ax1);
-  const handle = m.steel;
   for (const md of mods) {
     if (md.kind === 'drawers' || md.kind === 'hob') {
       const hs = [0.2, 0.25]; const rest = (fy1 - fy0) - 0.45;
-      frontsGrid(K, m.cab, md.x0, md.x1, fy0, fy1, zf, 1, 3, { rowHeights: [hs[0], hs[1], rest], handle, drawers: true });
+      frontsGrid(K, low, md.x0, md.x1, fy0, fy1, zf, 1, 3, { rowHeights: [hs[0], hs[1], rest], handle, drawers: true });
     } else if (md.kind === 'filler') {
-      K.box(m.cab, md.x0 + 0.0015, md.x1 - 0.0015, fy0 + 0.0015, fy1 - 0.0015, zf - 0.018, zf);
+      K.box(low, md.x0 + 0.0015, md.x1 - 0.0015, fy0 + 0.0015, fy1 - 0.0015, zf - 0.018, zf);
     } else {
       const cols = (md.x1 - md.x0) > 0.62 ? 2 : 1;
-      frontsGrid(K, m.cab, md.x0, md.x1, fy0, fy1, zf, cols, 1, { handle, handleY: fy1 - 0.08 });
+      frontsGrid(K, low, md.x0, md.x1, fy0, fy1, zf, cols, 1, { handle, handleY: fy1 - 0.2 });
     }
   }
   // ---- worktop (with undermount sink cut-out)
@@ -684,10 +695,10 @@ function counter(K, { w, d, h, o, P }) {
   const lineZ = (sz0 + sz1) / 2;
   if (sinkX !== undefined && sinkX !== null && sinkX !== false) {
     const sx0 = sinkX - sinkW / 2, sx1 = sinkX + sinkW / 2;
-    K.box(m.worktop, wtX0, sx0, ty0, H, tz0, tz1);
-    K.box(m.worktop, sx1, wtX1, ty0, H, tz0, tz1);
-    K.box(m.worktop, sx0, sx1, ty0, H, tz0, sz0);
-    K.box(m.worktop, sx0, sx1, ty0, H, sz1, tz1);
+    K.box(top, wtX0, sx0, ty0, H, tz0, tz1);
+    K.box(top, sx1, wtX1, ty0, H, tz0, tz1);
+    K.box(top, sx0, sx1, ty0, H, tz0, sz0);
+    K.box(top, sx0, sx1, ty0, H, sz1, tz1);
     // bowl
     const by = ty0 - 0.2;
     K.box(m.steel, sx0, sx1, by - 0.004, by, sz0, sz1);
@@ -702,15 +713,9 @@ function counter(K, { w, d, h, o, P }) {
     K.add(m.black, cached('tapcurve', () => new THREE.TubeGeometry(curve, 20, 0.0115, 8)), tx, H, tz);
     K.boxc(m.black, tx + 0.03, H + 0.12, tz, 0.05, 0.012, 0.012, 0, 0, 0.35, 0.004, 1);
   } else {
-    K.box(m.worktop, wtX0, wtX1, ty0, H, tz0, tz1);
+    K.box(top, wtX0, wtX1, ty0, H, tz0, tz1, 0.002, 1);
   }
-  if (island) { // waterfall ends + finished back
-    K.box(m.worktop, -W / 2, -W / 2 + topT, 0, H, -D / 2, D / 2);
-    K.box(m.worktop, W / 2 - topT, W / 2, 0, H, -D / 2, D / 2);
-    K.box(m.cab, xL, xR, plinth - 0.002, fy1, -D / 2 + 0.03, -D / 2 + 0.048);
-    const n = Math.max(2, Math.round((xR - xL) / 0.45));
-    for (let i = 1; i < n; i++) { const x = xL + (xR - xL) * i / n; K.box(m.carcass, x - 0.0015, x + 0.0015, plinth, fy1, -D / 2 + 0.0295, -D / 2 + 0.031); }
-    K.box(m.carcass, xL, xR, 0, plinth, -D / 2 + 0.05, -D / 2 + 0.06);
+  if (island) {
     // fruit bowl
     K.add(m.oak, lathe('bowl', [[0, 0], [0.04, 0], [0.09, 0.03], [0.11, 0.065], [0.105, 0.066], [0.085, 0.035], [0.035, 0.012], [0, 0.012]], 24), W * 0.18, H, 0);
   }
@@ -729,14 +734,14 @@ function counter(K, { w, d, h, o, P }) {
   if (island) return;
   // ---- backsplash
   const uy0 = 1.45, uy1 = 2.2;
-  K.box(m.worktop, -W / 2, W / 2, H, o.upper ? uy0 : H + 0.12, -D / 2, -D / 2 + 0.012);
+  K.box(top, -W / 2, W / 2, H, o.upper ? uy0 : H + 0.12, -D / 2, -D / 2 + 0.012);
   // ---- upper cabinets + slim hood
   const Du = 0.35, zuf = -D / 2 + Du;
   const hoodOn = !!o.hood && hobX !== undefined && hobX !== null && hobX !== false;
   if (o.upper) {
     K.box(m.carcass, -W / 2 + 0.018, W / 2 - 0.018, uy0 + 0.018, uy1 - 0.018, -D / 2, zuf - 0.018);
-    K.box(m.cab, -W / 2, -W / 2 + 0.018, uy0, uy1, -D / 2, zuf); K.box(m.cab, W / 2 - 0.018, W / 2, uy0, uy1, -D / 2, zuf);
-    K.box(m.cab, -W / 2, W / 2, uy1 - 0.018, uy1, -D / 2, zuf - 0.018);
+    K.box(up, -W / 2, -W / 2 + 0.018, uy0, uy1, -D / 2, zuf); K.box(up, W / 2 - 0.018, W / 2, uy0, uy1, -D / 2, zuf);
+    K.box(up, -W / 2 + 0.018, W / 2 - 0.018, uy1 - 0.018, uy1, -D / 2, zuf - 0.018);
     const segs = [];
     if (hoodOn) {
       const h0 = Math.max(-W / 2 + 0.018, hobX - 0.3), h1 = Math.min(W / 2 - 0.018, hobX + 0.3);
@@ -744,9 +749,9 @@ function counter(K, { w, d, h, o, P }) {
     } else segs.push([-W / 2 + 0.018, W / 2 - 0.018, uy0]);
     for (const [a, b, y0] of segs) {
       if (b - a < 0.05) continue;
-      K.box(m.cab, a, b, y0, y0 + 0.018, -D / 2, zuf - 0.018); // bottom panel
+      K.box(up, a, b, y0, y0 + 0.018, -D / 2, zuf - 0.018); // bottom panel
       const n = Math.max(1, Math.round((b - a) / 0.5));
-      frontsGrid(K, m.cab, a, b, y0, uy1 - 0.018, zuf, n, 1, {});
+      frontsGrid(K, up, a, b, y0, uy1 - 0.018, zuf, n, 1, {});
       if (y0 === uy0) K.box(m.led, a + 0.02, b - 0.02, uy0 - 0.003, uy0, zuf - 0.07, zuf - 0.05);
     }
     if (hoodOn) {
@@ -762,17 +767,18 @@ function counter(K, { w, d, h, o, P }) {
 
 function tall_cabinet(K, { w, d, h, P }) {
   const m = M(P);
+  const cab = mat('paint', P.kitchenUpper, { rough: 0.85 }), hdl = mat('black', P.kitchenHandle);
   const H = h, plinth = 0.1, zf = d / 2 - 0.027;
   K.box(m.carcass, -w / 2 + 0.03, w / 2 - 0.03, 0, plinth, -d / 2, zf - 0.07);
   K.box(m.carcass, -w / 2 + 0.018, w / 2 - 0.018, plinth, H - 0.018, -d / 2, zf - 0.018);
-  K.box(m.cab, -w / 2, -w / 2 + 0.018, 0, H, -d / 2, zf); K.box(m.cab, w / 2 - 0.018, w / 2, 0, H, -d / 2, zf);
-  K.box(m.cab, -w / 2 + 0.018, w / 2 - 0.018, H - 0.018, H, -d / 2, zf - 0.018);
+  K.box(cab, -w / 2, -w / 2 + 0.018, 0, H, -d / 2, zf); K.box(cab, w / 2 - 0.018, w / 2, 0, H, -d / 2, zf);
+  K.box(cab, -w / 2 + 0.018, w / 2 - 0.018, H - 0.018, H, -d / 2, zf - 0.018);
   const x0 = -w / 2 + 0.018, x1 = w / 2 - 0.018;
   // two drawers
-  frontsGrid(K, m.cab, x0, x1, plinth, 0.78, zf, 1, 2, { handle: m.steel, drawers: true });
+  frontsGrid(K, cab, x0, x1, plinth, 0.78, zf, 1, 2, { handle: hdl, drawers: true });
   // appliances: oven + combi-steam, 600 wide, filler strips each side
   const aw = Math.min(0.597, x1 - x0 - 0.01), ax0 = -aw / 2, ax1 = aw / 2;
-  if (ax0 - x0 > 0.01) { K.box(m.cab, x0 + 0.0015, ax0 - 0.002, 0.78, 1.83, zf - 0.018, zf); K.box(m.cab, ax1 + 0.002, x1 - 0.0015, 0.78, 1.83, zf - 0.018, zf); }
+  if (ax0 - x0 > 0.01) { K.box(cab, x0 + 0.0015, ax0 - 0.002, 0.78, 1.83, zf - 0.018, zf); K.box(cab, ax1 + 0.002, x1 - 0.0015, 0.78, 1.83, zf - 0.018, zf); }
   const app = (y0, y1) => {
     K.box(m.smoked, ax0, ax1, y0 + 0.002, y1 - 0.002, zf - 0.025, zf, 0.004, 1);                      // black glass front
     K.box(m.steel, ax0, ax1, y1 - 0.075, y1 - 0.002, zf - 0.024, zf + 0.001, 0.003, 1);                 // control strip
@@ -783,7 +789,7 @@ function tall_cabinet(K, { w, d, h, P }) {
   };
   app(0.785, 1.385);
   app(1.39, 1.83);
-  frontsGrid(K, m.cab, x0, x1, 1.83, H - 0.018, zf, 1, 1, { handle: m.steel, handleY: 1.83 + 0.12 });
+  frontsGrid(K, cab, x0, x1, 1.83, H - 0.018, zf, 1, 1, { handle: hdl, handleY: 1.83 + 0.12 });
 }
 
 function fridge(K, { w, d, h, P }) {

@@ -35,9 +35,9 @@ export function createHUD({ PLAN, lookup, onToggleMode, onToggleTheme, onPickRoo
   bLabels.addEventListener('click', () => onToggleLabels());
   bRooms.addEventListener('click', () => { menu.hidden = !menu.hidden; bRooms.classList.toggle('on', !menu.hidden); });
 
-  // room menu (skip duplicates like the two A/C ledges + lobby)
+  // room menu (skip duplicates like the two A/C ledges)
   const seen = new Set();
-  const rooms = PLAN.rooms.filter((r) => { const k = r.zh + r.name; if (seen.has(k) || r.id === 'lobby') return false; seen.add(k); return true; });
+  const rooms = PLAN.rooms.filter((r) => { const k = r.zh + r.name; if (seen.has(k)) return false; seen.add(k); return true; });
   for (const r of rooms) {
     const b = document.createElement('button');
     b.className = 'menu-item';
@@ -78,6 +78,18 @@ export function createHUD({ PLAN, lookup, onToggleMode, onToggleTheme, onPickRoo
     }
     g.fillStyle = '#7fb4cf';
     for (const w of PLAN.windows) { const [a, b] = toMap(w.x0, w.z0), [c, d] = toMap(w.x1, w.z1); g.fillRect(a - 0.5, b - 0.5, c - a + 1, d - b + 1); }
+    // doors: swing leaves as thin arcs-less lines, sliders as bars
+    g.strokeStyle = '#c08a52'; g.lineWidth = 1.1; g.fillStyle = '#c08a52';
+    for (const d of PLAN.doors || []) {
+      if (d.type === 'swing') {
+        const r = (d.closedRot * Math.PI) / 180, [hx, hz] = d.hinge;
+        const [a1, b1] = toMap(hx, hz), [a2, b2] = toMap(hx + Math.cos(r) * d.width, hz - Math.sin(r) * d.width);
+        g.beginPath(); g.moveTo(a1, b1); g.lineTo(a2, b2); g.stroke();
+      } else if (d.x0 != null) {
+        const [a1, b1] = toMap(d.x0, d.z0), [a2, b2] = toMap(d.x1, d.z1);
+        g.fillRect(a1, b1, Math.max(1, a2 - a1), Math.max(1, b2 - b1));
+      }
+    }
   }
   function toMap(x, z) { return [pad + (x - B.x0) * scale, pad + (z - B.z0) * scale]; }
   layoutMinimap();

@@ -18,14 +18,6 @@ export function preparePlan(PLAN) {
     r.centroid = polyCentroid(r.poly);
     if (!pointInPoly(r.centroid[0], r.centroid[1], r.poly)) r.centroid = [(r.bbox.x0 + r.bbox.x1) / 2, (r.bbox.z0 + r.bbox.z1) / 2];
   }
-  P.fixes = [];
-  // Data-gap guard: the partition between Bedroom 3 and Living (x 9.527–9.753, z 2.016–4.095) is missing in
-  // plan.js (see engine report). Patch it only while it is missing so a corrected plan.js wins automatically.
-  const covered = (x, z) => P.walls.some((w) => w.y0 < 0.5 && w.y1 > 2 && x > w.x0 && x < w.x1 && z > w.z0 && z < w.z1);
-  if (P.rooms.some((r) => r.id === 'bed3') && !covered(9.64, 3.0) && !covered(9.64, 2.5)) {
-    P.walls.push({ x0: 9.527, z0: 2.016, x1: 9.753, z1: 4.095, y0: 0, y1: P.ceiling, kind: 'wall', patched: true });
-    P.fixes.push('added missing wall bed3|living x9.527–9.753 z2.016–4.095');
-  }
   return P;
 }
 
@@ -520,7 +512,7 @@ function buildSlide(d, P, M, STYLE, frameAcc, acc) {
   for (let i = 0; i < n; i++) {
     const pg = new THREE.Group();
     const fa = new GeoAcc(), ga = new GeoAcc();
-    const track = n === 1 ? 0 : ((i === 0 || i === n - 1) ? -1 : 1);
+    const track = n === 1 ? 0 : n === 2 ? (i === 0 ? -1 : 1) : ((i === 0 || i === n - 1) ? -1 : 1);
     const dz = track * 0.022, th = glass ? 0.035 : 0.04;
     // panel local: u from 0..pw, centred on depth 0
     const pb = (u0, u1, y0, y1, acc2, dd = th) => alongX ? acc2.box(u0, y0, -dd / 2, u1, y1, dd / 2) : acc2.box(-dd / 2, y0, u0, dd / 2, y1, u1);
@@ -544,8 +536,18 @@ function buildSlide(d, P, M, STYLE, frameAcc, acc) {
     let openU = closedU;
     if (n === 1) {
       // slide toward the side with more wall (pocket)
-      const leftRoom = o0 - a0, rightRoom = a1 - o1;
-      openU = leftRoom >= rightRoom ? closedU - (pw - 0.12) : closedU + (pw - 0.12);
+      // slide toward the side where wall hides the panel (pocket); test coverage of the open footprint
+      const travel = pw - 0.12;
+      const cover = (sgn) => {
+        let k = 0;
+        for (let t = 0.05; t < travel; t += 0.05) {
+          const u = sgn < 0 ? o0 - t : o1 + t;
+          const [x, z] = alongX ? [u, c] : [c, u];
+          if (P.walls.some((w) => w.y0 < 0.5 && w.y1 > 1.8 && x > w.x0 && x < w.x1 && z > w.z0 && z < w.z1)) k++;
+        }
+        return k;
+      };
+      openU = cover(-1) >= cover(1) ? closedU - travel : closedU + travel;
     } else if (n === 2) {
       openU = i === 0 ? closedU : o0;   // panel 1 slides over panel 0
     } else {

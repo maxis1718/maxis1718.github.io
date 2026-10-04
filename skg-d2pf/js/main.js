@@ -49,7 +49,6 @@ scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 // ── build ──────────────────────────────────────────────────────────────────
 setLoad('建構空間 Building…');
 const P = preparePlan(RAW_PLAN);
-if (P.fixes.length) console.info('[house] plan guards applied:', P.fixes);
 const M = makeMaterials(STYLE, renderer, MOBILE);
 const house = buildHouse(P, M, STYLE);
 scene.add(house.root);
@@ -191,7 +190,9 @@ let tween = null;
 
 // start: foyer just inside the main door, looking north toward the living room
 const foyer = P.rooms.find((r) => r.id === 'foyer');
-const START = foyer ? { x: Math.min(foyer.bbox.x1 - 0.5, 14.75), z: foyer.bbox.z1 - 0.65, yaw: 0, pitch: -3 } : { x: CENTER.x, z: CENTER.z, yaw: 0, pitch: 0 };
+// start: north end of the entrance hall, looking north-west across kitchen/dining to the living room + balcony
+const START = params.has('start') ? (([x, z, y]) => ({ x, z, yaw: y, pitch: -4 }))(params.get('start').split(',').map(Number))
+  : foyer ? { x: 14.85, z: 6.35, yaw: 38, pitch: -4 } : { x: CENTER.x, z: CENTER.z, yaw: 0, pitch: 0 };
 walk.setPose(START.x, START.z, START.yaw, START.pitch);
 
 // ── camera fov per aspect ──────────────────────────────────────────────────
@@ -217,7 +218,6 @@ const hud = createHUD({
 // room labels (overview)
 const labelObjs = [];
 for (const r of P.rooms) {
-  if (r.id === 'lobby') continue;
   const el = document.createElement('div');
   el.className = 'room-label' + (r.area < 3 ? ' small' : '') + (MOBILE || Math.min(innerWidth, innerHeight) < 600 ? ' compact' : '');
   el.innerHTML = `<b>${r.zh}</b><span>${r.name}</span><em>${r.dims || ''}</em>`;
@@ -319,6 +319,7 @@ function setMode(m) {
   }
   hud.setMode(mode);
   updateLabels();
+  updateBackdrop(); adaptWarmup(1.5);
   if (mode === 'overview') hud.setRoom({ zh: '全屋俯瞰', name: 'Whole unit', dims: '122 m²' });
 }
 function stepTween(dt) {
@@ -365,13 +366,14 @@ function applyDoor(d) {
     if (d.alongX) p.g.position.x = u; else p.g.position.z = u;
   }
 }
+let doorOverride = null;   // debug: null = automatic, 0 = force closed, 1 = force open
 function updateDoors(dt) {
   const px = walk.state.x, pz = walk.state.z;
   for (const d of house.doors) {
     if (!d) continue;
     const dist = Math.hypot(px - d.center[0], pz - d.center[1]);
     const near = d.type === 'swing' ? dist < (d.id === 'main' ? 0.95 : 1.4) : distToSeg(px, pz, d) < 1.5;
-    d.target = (mode === 'overview') ? 1 : near ? 1 : 0;
+    d.target = doorOverride !== null ? doorOverride : (mode === 'overview') ? 1 : near ? 1 : 0;
     const before = d.open;
     springTo(d, d.target, Math.min(dt, 0.05), d.type === 'swing' ? 6.0 : 5.0);
     if (before !== d.open) applyDoor(d);
@@ -387,7 +389,7 @@ function snapDoors() {
   for (const d of house.doors) {
     if (!d) continue;
     const near = d.type === 'swing' ? Math.hypot(px - d.center[0], pz - d.center[1]) < (d.id === 'main' ? 0.95 : 1.4) : distToSeg(px, pz, d) < 1.5;
-    d.open = near ? 1 : 0; d.vel = 0; applyDoor(d);
+    d.open = doorOverride !== null ? doorOverride : near ? 1 : 0; d.vel = 0; applyDoor(d);
   }
 }
 
@@ -410,11 +412,30 @@ function applyTheme(name) {
   exterior.userData.cityMat.emissiveIntensity = T.cityWindows;
   exterior.userData.groundMat.color.set(T.groundColor || STYLE.ground.color).multiplyScalar(T.ground);
   applyLampGlow();
+  updateBackdrop();
+  adaptWarmup(1.0);
   renderer.shadowMap.needsUpdate = true;
   document.body.classList.toggle('theme-evening', currentTheme === 'evening');
   hud.setTheme(currentTheme);
 }
 let interiorTarget = 0;
+// overview backdrop: optional screen-space gradient (evening dusk) instead of ground + city
+const bgCache = {};
+function gradientTexture(stops) {
+  const key = stops.join(); if (bgCache[key]) return bgCache[key];
+  const c = document.createElement('canvas'); c.width = 4; c.height = 256;
+  const g = c.getContext('2d'), grd = g.createLinearGradient(0, 0, 0, 256);
+  stops.forEach((col, i) => grd.addColorStop(i / (stops.length - 1), col));
+  g.fillStyle = grd; g.fillRect(0, 0, 4, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return (bgCache[key] = t);
+}
+function updateBackdrop() {
+  const T = THEMES[currentTheme] || THEMES.day;
+  const useBg = mode === 'overview' && T.overviewBg;
+  scene.background = useBg ? gradientTexture(T.overviewBg) : null;
+  sky.visible = !useBg; exterior.visible = !useBg;
+}
 let spotTimer = 0;
 function updateInteriorLights(dt) {
   spotTimer -= dt;
@@ -465,20 +486,24 @@ window.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', () => setTimeout(onResize, 250));
 
 const ADAPT = !params.has('noadapt');
-const PR_STEPS = [2, 1.5, 1.25, 1];
-let fpsEMA = 60, fpsWindow = [], adaptTimer = 0, lowCount = 0;
+const PR_STEPS = [2, 1.75, 1.5, 1.25, 1];
+// starts at min(dpr, 2); measures 0.75 s windows (after a 1 s warm-up that skips shader compiles) and steps
+// down 2 → 1.5 → 1.25 → 1 whenever a window averages < 50 fps — reaches the floor within ~2–3 s on a slow GPU.
+let fpsEMA = 60, fpsWindow = [], adaptTimer = 0, adaptWarm = 1.0;
+function adaptWarmup(t = 1.0) { adaptWarm = t; fpsWindow = []; adaptTimer = 0; }
 function adapt(dt) {
+  if (adaptWarm > 0) { adaptWarm -= dt; return; }
   fpsWindow.push(dt);
   adaptTimer += dt;
-  if (adaptTimer < 2) return;
+  if (adaptTimer < 0.75) return;
   const avg = fpsWindow.length / fpsWindow.reduce((a, b) => a + b, 0);
   fpsWindow = []; adaptTimer = 0;
   if (!ADAPT || document.hidden) return;
-  if (avg < 45) lowCount++; else lowCount = 0;
-  if (lowCount >= 2) {
-    lowCount = 0;
-    const next = PR_STEPS.find((p) => p < pixelRatio - 0.01);
-    if (next) { pixelRatio = next; renderer.setPixelRatio(pixelRatio); onResize(); console.info('[house] pixelRatio →', pixelRatio); }
+  if (avg < 50) {
+    // fill-rate bound → scale pixel count by fps ratio, i.e. ratio by its square root; snap down to a step
+    const want = pixelRatio * Math.sqrt(Math.max(avg, 5) / 58);
+    const next = PR_STEPS.find((p) => p <= want + 0.01) || PR_STEPS[PR_STEPS.length - 1];
+    if (next && next < pixelRatio - 0.01) { pixelRatio = next; renderer.setPixelRatio(pixelRatio); onResize(); adaptWarmup(0.25); console.info('[house] pixelRatio →', pixelRatio); }
   }
 }
 
@@ -505,7 +530,7 @@ window.addEventListener('keydown', (e) => { if (e.code === 'KeyH' && !MOBILE) se
 const clock = new THREE.Clock();
 let frames = 0, fpsVal = 0, fpsAcc = 0;
 function frame() {
-  const dt = Math.min(clock.getDelta(), 0.1);
+  const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.1);
   frames++; fpsAcc += dt; if (fpsAcc >= 0.5) { fpsVal = frames / fpsAcc; frames = 0; fpsAcc = 0; }
   fpsEMA += (1 / Math.max(dt, 1e-3) - fpsEMA) * 0.05;
   if (mode === 'walk' && !tween) walk.update(dt);
@@ -523,7 +548,7 @@ function frame() {
   hud.drawMinimap(mx, mz, myaw, currentRoom && mode === 'walk' ? currentRoom.id : null);
   if (hq && composer) composer.render(); else renderer.render(scene, camera);
   if (labelsOn && mode === 'overview') labelRenderer.render(scene, camera);
-  adapt(dt);
+  adapt(Math.min(rawDt, 2));
 }
 
 // ── boot ───────────────────────────────────────────────────────────────────
@@ -559,16 +584,18 @@ window.__house = {
   quality(q) { return setQuality(q); },
   goRoom(id) { const r = P.rooms.find((q) => q.id === id); if (r) goRoom(r); return !!r; },
   fps() { return Math.round(fpsVal * 10) / 10; },
-  pose() { const S = walk.state; return { x: S.x, z: S.z, yaw: S.yaw / DEG, pitch: S.pitch / DEG, vx: S.vx, vz: S.vz }; },
+  pose() { const S = walk.state, r = house.lookup.at(S.x, S.z); return { x: S.x, z: S.z, yaw: S.yaw / DEG, pitch: S.pitch / DEG, vx: S.vx, vz: S.vz, room: r ? r.id : null }; },
   info() {
     const i = renderer.info;
     return {
       calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures,
-      programs: i.programs ? i.programs.length : null, pixelRatio, fps: this.fps(), mode, theme: currentTheme,
-      room: currentRoom && currentRoom.id, pose: this.pose(), furniture: furnitureSource, planFixes: P.fixes, mobile: MOBILE, touch: TOUCH,
+      programs: i.programs ? i.programs.length : null, pixelRatio, dpr: renderer.getPixelRatio(), deviceDpr: window.devicePixelRatio, fps: this.fps(), mode, theme: currentTheme,
+      room: currentRoom && currentRoom.id, pose: this.pose(), furniture: furnitureSource, mobile: MOBILE, touch: TOUCH,
     };
   },
   render() { renderer.render(scene, camera); if (labelsOn && mode === 'overview') labelRenderer.render(scene, camera); },
+  step(sec = 1) { const n = Math.round(sec * 60); for (let i = 0; i < n; i++) { if (mode === 'walk') walk.update(1 / 60); updateDoors(1 / 60); } return this.pose(); },   // deterministic sim for tests
+  forceDoors(v = null) { doorOverride = v; snapDoors(); return v; },
   doors() { return house.doors.map((d) => ({ id: d.id, open: +d.open.toFixed(2) })); },
   _: { THREE, scene, camera, renderer, house, walk, orbit, P },
 };
@@ -590,5 +617,5 @@ function setModeImmediate(name) {
     currentRoom = null;
   }
   renderer.shadowMap.needsUpdate = true;
-  hud.setMode(mode); updateLabels();
+  hud.setMode(mode); updateLabels(); updateBackdrop();
 }
