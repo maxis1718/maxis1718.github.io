@@ -7,7 +7,7 @@
 
 export const STYLE = {
   // ── Architecture ──────────────────────────────────────────────────────────
-  wall:        { color: '#e6dfd4', roughness: 0.93, plasterNoise: 0.018 },   // matte, very light warm greige
+  wall:        { color: '#efe9de', roughness: 0.94, plasterNoise: 0.018 },   // matte, slightly creamy white
   facade:      { color: '#ddd6cb', roughness: 0.9 },                          // exterior / balcony wall paint
   wallCap:     { color: '#3b3a38', roughness: 0.9 },                          // wall tops seen in overview (poché)
   ceiling:     { color: '#fbfaf7', roughness: 0.96 },                          // whiter than walls
@@ -36,6 +36,26 @@ export const STYLE = {
   doorFrame:   { color: '#9d907f', roughness: 0.55 },                         // taupe frames/architraves
   handle:      { color: '#2f2f30', roughness: 0.35, metalness: 0.9 },
   slideOpaque: { color: '#ece8e1', roughness: 0.6 },                            // pocket door (non-glass)
+
+  // ── Feature wall (PLAN.features finish:'wabisabi') ───────────────────────
+  // timber-backed panel wrapped in wabi-sabi limewash wallpaper; one non-repeating procedural texture per surface
+  featureWall: {
+    color: '#f6f3ee',          // base tint × near-white mottle (avg ≈0.93) → perceived ≈ #cfcac3 light warm grey
+    roughness: 0.95, bump: 1.4,  // bump = trowel relief strength (shows under the grazing washer)
+    mottle: 0.045, strokes: 0.09, // cloudy variation / trowel-stroke contrast (0..~0.25)
+    pxPerM: 560, pxPerMMobile: 300,
+    edge: '#8a7660',           // exposed timber edge on the panel ends / top
+    gap: '#24221f', gapW: 0.008, // shadow-gap reveal at ceiling + both ends
+  },
+  // concealed linear LED wall-washer slot in the ceiling (feature.washer = true), warm 2700K
+  washer: { color: '#ffb469', slotOff: '#46423d', slotW: 0.03, offset: 0.05, glowH: 1.2 },
+
+  // ── Glass partitions (PLAN.windows kind:'partition') + interior glass sliders ─
+  partition: {
+    frame: '#1b1b1c', frameW: 0.02, frameD: 0.04, roughness: 0.6, metalness: 0.25,   // slim matte-black aluminium
+    glassColor: '#f2f6f5', glassOpacity: 0.07, envIntensity: 0.7,                   // clear, not milky
+    balconySliders: false,     // true → balcony sliders also get the slim black frames
+  },
 
   // ── Light fittings ────────────────────────────────────────────────────────
   downlight:   { spacing: 1.45, inset: 0.55, radius: 0.045, trim: '#d9d9d6' },
@@ -82,6 +102,8 @@ export const THEMES = {
     groundColor: null,      // null = STYLE.ground.color
     overviewBg: null,       // null = show ground/city behind the dollhouse; or [top, mid, bottom] screen gradient
     lampGlow: 0.5,          // multiplier on furniture emissive (pendants / lamps)
+    // 氛圍燈 ambient lighting (feature-wall washer + TV console under-glow); `on` = default when switching to this theme
+    ambient: { on: false, slot: 1.6, wallGlow: 0.32, light: 0.9, furniture: 0.8 },
   },
   evening: {
     name: 'evening',
@@ -98,5 +120,6 @@ export const THEMES = {
     groundColor: '#1a2132',
     overviewBg: ['#0b1630', '#2b3b63', '#5a5675'],   // dusk gradient (matches evening sky)
     lampGlow: 1.6,
+    ambient: { on: true, slot: 2.2, wallGlow: 0.6, light: 3.2, furniture: 1.0 },
   },
 };

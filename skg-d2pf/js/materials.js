@@ -206,6 +206,64 @@ function radialGlowTexture() {
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+// ── Wabi-sabi limewash wallpaper: ONE non-repeating texture for a whole surface (w × h metres) ──
+// near-white greyscale mottle (multiplied by STYLE.featureWall.color); also used as the bump map.
+function wabiSabiTexture(cfg, wM, hM, mobile) {
+  const ppm = mobile ? cfg.pxPerMMobile : cfg.pxPerM;
+  const k = Math.min(1, 2048 / (Math.max(wM, hM) * ppm));
+  const W = Math.round(wM * ppm * k), H = Math.round(hM * ppm * k), pm = ppm * k;   // px per metre
+  const cv = canvas(W, H), g = cv.getContext('2d'), r = rng(4242);
+  const grey = (v, a) => `rgba(${v},${v},${v},${a})`;
+  g.fillStyle = grey(238, 1); g.fillRect(0, 0, W, H);
+  // 1) large soft clouds (limewash mottling) — low contrast, several scales
+  for (const [n, r0, r1] of [[40, 0.5, 1.2], [140, 0.18, 0.5], [320, 0.05, 0.18]]) {
+    for (let i = 0; i < n * wM * hM / 4; i++) {
+      const x = r() * W, y = r() * H, rad = (r0 + r() * (r1 - r0)) * pm;
+      const v = Math.round(238 + (r() - 0.55) * 255 * cfg.mottle * 2.2);
+      const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+      grd.addColorStop(0, grey(v, 0.55)); grd.addColorStop(0.6, grey(v, 0.22)); grd.addColorStop(1, grey(v, 0));
+      g.fillStyle = grd; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+  }
+  // 2) trowel strokes: short sweeping arcs with a lighter body and a faint darker ridge on one edge
+  const strokes = Math.round(260 * wM * hM);
+  g.lineCap = 'round';
+  for (let i = 0; i < strokes; i++) {
+    const x = r() * W, y = r() * H, len = (0.12 + r() * 0.38) * pm, wid = (0.025 + r() * 0.08) * pm;
+    const ang = (r() - 0.5) * Math.PI * 0.9 + (r() < 0.5 ? 0 : Math.PI), bend = (r() - 0.5) * 0.9;
+    const dx = Math.cos(ang), dy = Math.sin(ang), nx = -dy, ny = dx;
+    const ex = x + dx * len, ey = y + dy * len, cx = x + dx * len / 2 + nx * bend * len * 0.5, cy = y + dy * len / 2 + ny * bend * len * 0.5;
+    const light = r() < 0.6;
+    g.strokeStyle = grey(light ? 255 : 214, cfg.strokes * (0.45 + r() * 0.9));
+    g.lineWidth = wid;
+    g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(cx, cy, ex, ey); g.stroke();
+    g.strokeStyle = grey(200, cfg.strokes * 0.8 * r()); g.lineWidth = Math.max(0.8, wid * 0.07);
+    const o = wid * 0.5;
+    g.beginPath(); g.moveTo(x + nx * o, y + ny * o); g.quadraticCurveTo(cx + nx * o, cy + ny * o, ex + nx * o, ey + ny * o); g.stroke();
+  }
+  // 3) fine grain / pores
+  noiseDots(g, W, H, r, Math.round(W * H / 22), 0.05, grey(196, 1), grey(255, 1));
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.anisotropy = ANISO;
+  return t;
+}
+
+// soft wash gradient for the LED washer glow plane: alpha 1 at the top → 0, faded at both ends
+function washTexture() {
+  const W = 128, H = 256, cv = canvas(W, H), g = cv.getContext('2d');
+  const img = g.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const v = 1 - y / (H - 1);                                   // canvas top = wall top (uv flipY)
+    const ends = Math.min(1, Math.min(x, W - 1 - x) / (W * 0.07));
+    const a = Math.pow(v, 2.2) * (0.25 + 0.75 * Math.pow(v, 6)) * (0.35 + 0.65 * ends);
+    const i = (y * W + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = 255; img.data[i + 3] = Math.round(255 * Math.min(1, a * 1.3));
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
 // ── Material factory ───────────────────────────────────────────────────────
 export function makeMaterials(STYLE, renderer, mobile) {
   ANISO = Math.min(mobile ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
@@ -263,6 +321,23 @@ export function makeMaterials(STYLE, renderer, mobile) {
     color: '#ffffff', vertexColors: true, transparent: true, depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   });
+  // feature wall (texture made per surface size by build.js)
+  const FWc = STYLE.featureWall;
+  M.makeFeatureWall = (wM, hM) => {
+    const map = wabiSabiTexture(FWc, wM, hM, mobile);
+    return std({ color: FWc.color, map, bumpMap: map, bumpScale: FWc.bump, roughness: FWc.roughness, envMapIntensity: 0.35 });
+  };
+  M.featureEdge = std({ color: FWc.edge, map: veneerTexture({ color: '#ffffff', grain: '#d8cfc4' }, 41), roughness: 0.7 });
+  M.gap = std({ color: FWc.gap, roughness: 1, envMapIntensity: 0 });
+  M.washerSlot = new THREE.MeshBasicMaterial({ color: STYLE.washer.slotOff, side: THREE.DoubleSide });
+  M.washerGlow = new THREE.MeshBasicMaterial({
+    map: washTexture(), color: STYLE.washer.color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+    depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const PT = STYLE.partition;
+  M.frameBlack = std({ color: PT.frame, roughness: PT.roughness, metalness: PT.metalness });
+  M.glassClear = std({ color: PT.glassColor, transparent: true, opacity: PT.glassOpacity, roughness: 0.03, metalness: 0,
+    envMapIntensity: PT.envIntensity, depthWrite: false });
   M.placeholder = std({ color: '#d5d3cf', roughness: 0.8 });
   M.shadowOnly = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide });
   return M;

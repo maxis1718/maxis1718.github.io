@@ -17,7 +17,7 @@ const CAST = new Set(['bed', 'sofa', 'armchair', 'dining_table', 'coffee_table',
 
 const DEFAULT_H = {
   bed: 1.05, nightstand: 0.5, wardrobe: 2.4, desk: 0.75, chair: 0.95, sofa: 0.8, armchair: 0.8, coffee_table: 0.38,
-  tv_console: 0.45, tv: 0, rug: 0.012, dining_table: 0.75, dining_chair: 0.8, pendant: 0, plant: 1.4, floor_lamp: 1.6,
+  tv_console: 0.4, tv: 0, rug: 0.012, dining_table: 0.75, dining_chair: 0.8, pendant: 0, plant: 1.4, floor_lamp: 1.6,
   counter: 0.9, fridge: 1.85, washer_dryer: 1.85, db_box: 0.75, toilet: 0.8, vanity: 0.86, shower: 2.2, towel_rail: 0.8,
   shelving: 2.0, outdoor_table: 0.74, outdoor_chair: 0.8, ac_condenser: 0.6, aircon_indoor: 0.3, curtain: 2.6, picture: 0,
   bookshelf: 1.8, side_table: 0.5, bench: 0.45, tall_cabinet: 2.4,
@@ -58,12 +58,13 @@ export function makeFurniture(item, theme) {
     }
     const tmp = new THREE.Group();
     K.build(tmp, CAST.has(type));
-    parts = tmp.children.map(m => ({ geometry: m.geometry, material: m.material, cast: m.castShadow, receive: m.receiveShadow }));
+    parts = tmp.children.map(m => ({ geometry: m.geometry, material: m.material, cast: m.castShadow, receive: m.receiveShadow, amb: !!m.material.userData.ambient }));
     _cache.set(key, parts);
   }
   for (const p of parts) {
     const m = new THREE.Mesh(p.geometry, p.material);
     m.castShadow = p.cast; m.receiveShadow = p.receive;
+    if (p.amb) { m.userData.ambientGlow = true; m.castShadow = false; m.receiveShadow = false; }
     group.add(m);
   }
   return group;
@@ -275,7 +276,7 @@ function coffee_table(K, { w, d, h, P }) {
   // decor: two books + ceramic bowl
   K.box(mat('paint', '#e3ddd2'), -0.28, -0.04, H, H + 0.022, -0.1, 0.08, 0.002, 1);
   K.box(mat('paint', '#7d8778'), -0.26, -0.06, H + 0.022, H + 0.04, -0.08, 0.06, 0.002, 1);
-  K.add(m.ceramic, lathe('bowl', [[0, 0], [0.04, 0], [0.09, 0.03], [0.11, 0.065], [0.105, 0.066], [0.085, 0.035], [0.035, 0.012], [0, 0.012]], 24), 0.2, H, 0.02);
+  K.add(m.ceramic, lathe('bowl', [[0, 0], [0.04, 0], [0.09, 0.03], [0.11, 0.065], [0.105, 0.066], [0.085, 0.035], [0.035, 0.012], [0, 0.012]], 24), Math.min(0.2, w / 2 - 0.12), H, 0.02);
 }
 
 function side_table(K, { w, d, h, P }) {
@@ -288,37 +289,77 @@ function side_table(K, { w, d, h, P }) {
   K.add(m.ceramic, lathe('budvase', [[0, 0], [0.035, 0], [0.045, 0.05], [0.03, 0.12], [0.015, 0.15], [0.018, 0.16], [0, 0.16]], 16), R * 0.3, H, 0);
 }
 
-function tv_console(K, { w, d, h, P }) {
-  const m = M(P);
-  const H = h, legH = 0.12, t = 0.02;
-  const lx = w / 2 - 0.08, lz = d / 2 - 0.06;
-  legsTapered(K, m.black, [[-lx, -lz], [lx, -lz], [-lx, lz], [lx, lz]], 0, legH + 0.01, 0.014, 0.01, 8);
-  K.box(m.oak, -w / 2, w / 2, H - t, H, -d / 2, d / 2, 0.006, 1);
-  K.box(m.oak, -w / 2, w / 2, legH, legH + t, -d / 2, d / 2 - 0.01, 0.004, 1);
-  K.box(m.oak, -w / 2, -w / 2 + t, legH, H - t, -d / 2, d / 2, 0.004, 1);
-  K.box(m.oak, w / 2 - t, w / 2, legH, H - t, -d / 2, d / 2, 0.004, 1);
-  K.box(m.carcass, -w / 2 + t, w / 2 - t, legH + t, H - t, -d / 2, d / 2 - 0.03);
-  // fluted (reeded) oak doors
-  const n = Math.max(2, Math.round((w - 2 * t) / 0.45));
-  const x0 = -w / 2 + t, cw = (w - 2 * t) / n, fy0 = legH + t + 0.003, fy1 = H - t - 0.003, fh = fy1 - fy0;
-  const flute = 0.024;
-  for (let i = 0; i < n; i++) {
-    const a = x0 + i * cw + 0.002, b = x0 + (i + 1) * cw - 0.002;
-    K.box(m.oak, a, b, fy0, fy1, d / 2 - 0.022, d / 2 - 0.008);
-    const nf = Math.floor((b - a) / flute), fw = (b - a) / nf;
-    for (let k = 0; k < nf; k++) {
-      K.add(m.oak, cyl(fw / 2, fw / 2, fh, 6, true, -HP, PI), a + fw * (k + 0.5), (fy0 + fy1) / 2, d / 2 - 0.008, 0, 0, 0, 1, 1, 0.55);
-    }
-  }
-  // decor: vase + books
-  K.add(m.ceramic, lathe('vase', [[0, 0], [0.05, 0], [0.075, 0.06], [0.07, 0.16], [0.035, 0.24], [0.03, 0.27], [0.036, 0.28], [0, 0.28]], 20), -w / 2 + 0.22, H, -0.02);
-  K.box(mat('paint', '#d9d1c4'), w / 2 - 0.42, w / 2 - 0.14, H, H + 0.03, -0.1, 0.1, 0.002, 1);
-  K.box(mat('paint', '#5d5a55'), w / 2 - 0.4, w / 2 - 0.17, H + 0.03, H + 0.05, -0.09, 0.08, 0.002, 1);
+function roundedPlan(w, d, rf, rb) {
+  // plan outline (x, z): front (+z) corners radius rf, back (−z) corners radius rb
+  const s = new THREE.Shape(), x0 = -w / 2, x1 = w / 2, z0 = -d / 2, z1 = d / 2;
+  s.moveTo(x0 + rb, z0); s.lineTo(x1 - rb, z0); s.quadraticCurveTo(x1, z0, x1, z0 + rb);
+  s.lineTo(x1, z1 - rf); s.absarc(x1 - rf, z1 - rf, rf, 0, HP, false);
+  s.lineTo(x0 + rf, z1); s.absarc(x0 + rf, z1 - rf, rf, HP, PI, false);
+  s.lineTo(x0, z0 + rb); s.quadraticCurveTo(x0, z0, x0 + rb, z0);
+  return s;
+}
+/** vertical extrusion of a plan outline, spanning y∈[y0, y1], soft bevelled edges, exact outer footprint */
+function planBlock(key, w, d, rf, rb, y0, y1, bev = 0.006) {
+  return cached(`pb|${key}|${w.toFixed(3)}|${d.toFixed(3)}|${rf}|${rb}|${(y1 - y0).toFixed(3)}|${bev}`, () => {
+    const g = new THREE.ExtrudeGeometry(roundedPlan(w - 2 * bev, d - 2 * bev, Math.max(0.002, rf - bev), Math.max(0.001, rb - bev)),
+      { depth: (y1 - y0) - 2 * bev, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 12 });
+    g.rotateX(HP);                      // shape y → +z, extrusion → −y
+    g.translate(0, (y1 - y0) - bev, 0); // span [0, y1−y0]
+    return g;
+  }).clone().translate(0, y0, 0);
 }
 
-function tv(K, { w, d, o, P }) {
+function tv_console(K, { w, d, h, o, P }) {
+  // modern sideboard on a recessed toe-kick plinth; radiused vertical end panels; flush handleless fronts
+  // with fine push-gaps; warm 2700 K LED strip under the body + soft additive floor glow (userData.ambientGlow)
   const m = M(P);
-  const Ht = w * 9 / 16 + 0.02, cy = o.mount ?? 1.1;
+  const H = h || 0.4, kick = 0.06, setback = 0.05, rf = Math.min(0.12, d * 0.32, w / 4);
+  const body = mat('wood', P.tvConsole, { rough: 0.62 }), dark = mat('paint', P.tvConsolePlinth, { rough: 0.85 });
+  const gap = mat('paint', '#2b2622', { rough: 0.9 });
+  K.add(body, planBlock('tvc', w, d, rf, 0.006, kick, H, 0.006));
+  // recessed plinth (set back from the front and from the rounded ends)
+  K.box(dark, -w / 2 + rf * 0.6, w / 2 - rf * 0.6, 0, kick, -d / 2 + 0.02, d / 2 - setback);
+  // push-gaps on the flat front: 4 bays — doors outside, 2×2 drawers in the middle
+  const zf = d / 2 + 0.0006, fx0 = -w / 2 + rf, fx1 = w / 2 - rf, gy0 = kick + 0.012, gy1 = H - 0.012, gw = 0.003;
+  const bays = 4, bw = (fx1 - fx0) / bays;
+  const vline = (x) => K.box(gap, x - gw / 2, x + gw / 2, gy0, gy1, zf - 0.002, zf);
+  const hline = (a, b, y) => K.box(gap, a, b, y - gw / 2, y + gw / 2, zf - 0.002, zf);
+  for (let i = 0; i <= bays; i++) vline(fx0 + i * bw);
+  hline(fx0, fx1, gy1); hline(fx0, fx1, gy0);
+  hline(fx0 + bw, fx1 - bw, (gy0 + gy1) / 2);
+  // LED strip under the front edge of the body, just in front of the plinth
+  if (o.led !== false) {
+    const led = mat('emissive', P.ledWarm, { e: P.ledGlow ?? 2, amb: true });
+    K.box(led, -w / 2 + rf, w / 2 - rf, kick - 0.006, kick - 0.001, d / 2 - setback + 0.004, d / 2 - setback + 0.016);
+    const reach = 0.35, z0 = d / 2 - setback, gl = mat('floorglow', P.ledWarm, { opacity: 0.85 });
+    const gw2 = w - 2 * rf * 0.4;
+    K.add(gl, cached(`glowplane|${gw2.toFixed(3)}|${reach + setback}`, () => new THREE.PlaneGeometry(gw2, reach + setback).rotateX(-HP)), 0, 0.014, z0 + (reach + setback) / 2); // y 14 mm: clears a rug
+  }
+  // decor kept low and clear of the TV (bottom edge ≈ 0.62 m): ceramic vase at one end, books + bowl at the other
+  K.add(m.ceramic, lathe('lowvase', [[0, 0], [0.055, 0], [0.075, 0.05], [0.07, 0.11], [0.04, 0.16], [0.032, 0.18], [0.038, 0.19], [0, 0.19]], 20), -w / 2 + 0.2, H, -0.03);
+  K.box(mat('paint', '#d9d1c4'), w / 2 - 0.42, w / 2 - 0.16, H, H + 0.028, -0.11, 0.08, 0.002, 1);
+  K.box(mat('paint', '#6d675e'), w / 2 - 0.4, w / 2 - 0.19, H + 0.028, H + 0.048, -0.1, 0.06, 0.002, 1);
+  K.add(mat('ceramic', '#cfc6b8', { rough: 0.6 }), lathe('bowl', [[0, 0], [0.04, 0], [0.09, 0.03], [0.11, 0.065], [0.105, 0.066], [0.085, 0.035], [0.035, 0.012], [0, 0.012]], 24), w / 2 - 0.62, H, 0.0, 0, 0, 0, 0.8, 0.8, 0.8);
+}
+
+function tv(K, { w, d, h, o, P }) {
+  const cy = o.mount ?? 1.1;
+  if (o.model === 'frame75' || o.model === 'frame') {
+    // Samsung The Frame: flush wall mount, beige-oak picture-frame bezel, matte Art-Mode screen
+    const Ht = (h && h > 0.2) ? h : w * 0.571, y0 = cy - Ht / 2, y1 = cy + Ht / 2, z0 = -d / 2, z1 = d / 2;
+    const fw = 0.04, fr = mat('wood', P.tvFrame, { rough: 0.7 });
+    K.box(mat('black', '#2a2b2c'), -w / 2 + 0.01, w / 2 - 0.01, y0 + 0.01, y1 - 0.01, z0, z1 - 0.006);           // panel body
+    K.box(fr, -w / 2, w / 2, y1 - fw, y1, z0, z1, 0.0025, 1);
+    K.box(fr, -w / 2, w / 2, y0, y0 + fw, z0, z1, 0.0025, 1);
+    K.box(fr, -w / 2, -w / 2 + fw, y0 + fw, y1 - fw, z0, z1, 0.0025, 1);
+    K.box(fr, w / 2 - fw, w / 2, y0 + fw, y1 - fw, z0, z1, 0.0025, 1);
+    K.box(mat('black', '#1c1c1c', { rough: 0.8 }), -w / 2 + fw - 0.003, w / 2 - fw + 0.003, y0 + fw - 0.003, y1 - fw + 0.003, z1 - 0.008, z1 - 0.006); // thin black inner lip
+    const sw = w - 2 * fw, sh = Ht - 2 * fw;
+    K.add(mat('frameart', '#ffffff', { e: 0.05 }), cached(`plane|${sw.toFixed(4)}|${sh.toFixed(4)}`, () => new THREE.PlaneGeometry(sw, sh)), 0, cy, z1 - 0.005);
+    return;
+  }
+  const m = M(P);
+  const Ht = w * 9 / 16 + 0.02;
   const z0 = -d / 2;
   K.box(m.black, -w / 2 + 0.25, w / 2 - 0.25, cy - Ht / 2 + 0.15, cy + Ht / 2 - 0.15, z0, z0 + d - 0.012, 0.01, 1); // rear body
   K.box(mat('black', '#18191a'), -w / 2, w / 2, cy - Ht / 2, cy + Ht / 2, d / 2 - 0.012, d / 2, 0.003, 1);           // bezel
@@ -476,62 +517,83 @@ function curtain(K, { w, d, h, o, P }) {
 }
 
 // ============================================================ dining
-function dining_table(K, { w, d, h, P }) {
-  const m = M(P);
-  const H = h, t = 0.035;
-  K.add(m.oak, softSlab(w, d, t, 0.03), 0, H, 0);
+function dining_table(K, { w, d, h, o, P }) {
+  // matte travertine-look sintered stone top (12 mm, knife-edge underside bevel) on a light "oak wheat" base
+  const H = h || 0.75, t = 0.012;
   const alongZ = d >= w;
   const L = Math.max(w, d), S = Math.min(w, d);
-  const li = L / 2 - 0.12, si = S / 2 - 0.08;
+  const stone = o.top === 'oak' ? mat('wood', P.oak) : mat('sintered', P.sintered, { alongU: !alongZ });
+  const oak = mat('wood', o.legs === 'black' ? P.black : P.oakWheat, { rough: 0.6 });
+  K.add(stone, softSlab(w, d, t, 0.025), 0, H, 0);
+  // knife edge: bevelled under-panel inset from the edge so the slab reads 12 mm thin
+  const ut = 0.016, k = 0.93;
+  const under = cached(`knife|${w.toFixed(3)}|${d.toFixed(3)}|${k}`, () => {
+    const g = new THREE.CylinderGeometry(1, k, ut, 4, 1).toNonIndexed(); g.rotateY(PI / 4); g.computeVertexNormals();
+    g.scale((w - 0.05) / 2 * Math.SQRT2, 1, (d - 0.05) / 2 * Math.SQRT2); return g;   // top = (w−5cm)×(d−5cm), bevels inward
+  });
+  K.add(stone, under, 0, H - t - ut / 2, 0);
+  // four solid tapered square legs, set in from the corners, + slim apron
+  const li = L / 2 - 0.085, si = S / 2 - 0.075, top = H - t - ut;
   const legs = alongZ ? [[-si, -li], [si, -li], [-si, li], [si, li]] : [[-li, -si], [li, -si], [-li, si], [li, si]];
-  for (const [x, z] of legs) K.add(m.oak, cyl(0.032, 0.022, H - t, 4), x, (H - t) / 2, z, 0, PI / 4, 0);
-  // aprons
-  const ay0 = H - t - 0.075, ay1 = H - t;
+  for (const [x, z] of legs) K.add(oak, cached('sqleg' + top.toFixed(3), () => { const g = new THREE.CylinderGeometry(0.0225 * Math.SQRT2, 0.015 * Math.SQRT2, top, 4, 1).toNonIndexed(); g.rotateY(PI / 4); g.computeVertexNormals(); return g; }), x, top / 2, z);
+  const ay0 = top - 0.06, ay1 = top, at = 0.02;
   if (alongZ) {
-    K.box(m.oak, -si - 0.01, -si + 0.01, ay0, ay1, -li, li); K.box(m.oak, si - 0.01, si + 0.01, ay0, ay1, -li, li);
-    K.box(m.oak, -si, si, ay0, ay1, -li - 0.01, -li + 0.01); K.box(m.oak, -si, si, ay0, ay1, li - 0.01, li + 0.01);
+    for (const sx of [-1, 1]) K.box(oak, sx * si - at / 2, sx * si + at / 2, ay0, ay1, -li, li, 0.003, 1);
+    for (const sz of [-1, 1]) K.box(oak, -si, si, ay0, ay1, sz * li - at / 2, sz * li + at / 2, 0.003, 1);
   } else {
-    K.box(m.oak, -li, li, ay0, ay1, -si - 0.01, -si + 0.01); K.box(m.oak, -li, li, ay0, ay1, si - 0.01, si + 0.01);
-    K.box(m.oak, -li - 0.01, -li + 0.01, ay0, ay1, -si, si); K.box(m.oak, li - 0.01, li + 0.01, ay0, ay1, -si, si);
+    for (const sz of [-1, 1]) K.box(oak, -li, li, ay0, ay1, sz * si - at / 2, sz * si + at / 2, 0.003, 1);
+    for (const sx of [-1, 1]) K.box(oak, sx * li - at / 2, sx * li + at / 2, ay0, ay1, -si, si, 0.003, 1);
   }
-  // centrepiece: ceramic vase with a few stems + a low bowl
-  K.add(m.ceramic, lathe('dvase', [[0, 0], [0.045, 0], [0.06, 0.05], [0.055, 0.14], [0.025, 0.2], [0.022, 0.22], [0, 0.22]], 18), 0, H, alongZ ? -0.18 : 0);
-  K.add(m.ceramic, lathe('bowl', [[0, 0], [0.04, 0], [0.09, 0.03], [0.11, 0.065], [0.105, 0.066], [0.085, 0.035], [0.035, 0.012], [0, 0.012]], 24), 0, H, alongZ ? 0.2 : 0.3);
+  // centrepiece: stoneware vase + low bowl along the table axis
+  const ax = (v) => alongZ ? [0, v] : [v, 0];
+  const [vx, vz] = ax(-0.16), [bx, bz] = ax(0.2);
+  K.add(mat('ceramic', '#d8cfc1', { rough: 0.55 }), lathe('dvase', [[0, 0], [0.045, 0], [0.06, 0.05], [0.055, 0.14], [0.025, 0.2], [0.022, 0.22], [0, 0.22]], 18), vx, H, vz);
+  K.add(mat('ceramic', '#f3f0ea'), lathe('bowl', [[0, 0], [0.04, 0], [0.09, 0.03], [0.11, 0.065], [0.105, 0.066], [0.085, 0.035], [0.035, 0.012], [0, 0.012]], 24), bx, H, bz);
 }
 
-function chairBackBand(R, chord, t, hgt) {
-  return cached(`band|${R}|${chord.toFixed(3)}|${t}|${hgt}`, () => {
-    const a = Math.asin(chord / 2 / R);
-    const s = new THREE.Shape();
-    const N = 14, Ro = R + t / 2, Ri = R - t / 2;
-    // centre of curvature at +Z (y in shape space), back-most point at y=0
+function hoopBand(R, a, t, hgt) {
+  // horizontal back hoop: arc of radius R (centre +Z of the rear point), half-angle a, section t × hgt, rounded edges
+  return cached(`hoop|${R}|${a}|${t}|${hgt}`, () => {
+    const s = new THREE.Shape(), N = 28, Ro = R + t / 2, Ri = R - t / 2;
     for (let i = 0; i <= N; i++) { const p = -a + 2 * a * i / N; const x = Ro * Math.sin(p), y = R - Ro * Math.cos(p); i ? s.lineTo(x, y) : s.moveTo(x, y); }
     for (let i = N; i >= 0; i--) { const p = -a + 2 * a * i / N; s.lineTo(Ri * Math.sin(p), R - Ri * Math.cos(p)); }
-    const g = new THREE.ExtrudeGeometry(s, { depth: hgt - 0.008, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 1, curveSegments: 1 });
-    g.rotateX(HP); g.translate(0, hgt - 0.004, 0);   // spans y∈[0,hgt]
+    const b = Math.min(0.006, t / 3);
+    const g = new THREE.ExtrudeGeometry(s, { depth: hgt - 2 * b, bevelEnabled: true, bevelThickness: b, bevelSize: b * 0.6, bevelSegments: 2, curveSegments: 1 });
+    g.rotateX(HP); g.translate(0, hgt - b, 0);   // y ∈ [0, hgt]; shape y → +z
     return g;
   });
 }
 
-function dining_chair(K, { w, d, h, P }) {
-  const m = M(P);
-  const H = h, sy = 0.45;
-  const fx = w / 2 - 0.03, fz = d / 2 - 0.035, bz = -d / 2 + 0.04;
-  // front legs
-  for (const s of [-1, 1]) K.add(m.oak, cyl(0.017, 0.013, sy - 0.03, 10), s * fx, (sy - 0.03) / 2, fz);
-  // back legs / posts (slight rake)
-  const bl = H - 0.03;
-  for (const s of [-1, 1]) K.add(m.oak, cyl(0.016, 0.014, bl, 10), s * fx, bl / 2, bz + 0.004, -0.035, 0, 0);
-  // seat frame + upholstered pad
-  K.box(m.oak, -fx, fx, sy - 0.07, sy - 0.03, fz - 0.012, fz + 0.012, 0.005, 1);
-  K.box(m.oak, -fx, fx, sy - 0.07, sy - 0.03, bz - 0.01, bz + 0.014, 0.005, 1);
-  for (const s of [-1, 1]) K.box(m.oak, s * fx - 0.012, s * fx + 0.012, sy - 0.07, sy - 0.03, bz, fz, 0.005, 1);
-  K.box(m.fabric, -w / 2 + 0.008, w / 2 - 0.008, sy - 0.035, sy + 0.02, -d / 2 + 0.035, d / 2 - 0.004, 0.022, 2);
-  // stretchers
-  for (const s of [-1, 1]) K.box(m.oak, s * fx - 0.009, s * fx + 0.009, 0.15, 0.172, bz, fz);
-  K.box(m.oak, -fx + 0.009, fx - 0.009, 0.152, 0.17, -0.01, 0.008, 0.003, 1);
-  // curved backrest band
-  K.add(m.oak, chairBackBand(0.36, w - 0.02, 0.022, 0.13), 0, H - 0.165, -d / 2 + 0.006);
+function dining_chair(K, { w, d, h, o, P }) {
+  // Scandinavian round-back chair: solid oak frame, curved horizontal back hoop wrapping toward the arms,
+  // upholstered boucle seat (0.46 m), slim tapered legs. Front = +Z.
+  const oak = mat('wood', P.oakWheat, { rough: 0.6 }), seat = mat('fabric', P.chairSeat);
+  const sy = 0.46, top = Math.min(0.8, Math.max(0.74, o.back ?? 0.78));
+  const hw = Math.min(w, d) / 2;
+  const R = hw - 0.04, zc = -d / 2 + 0.012 + R + 0.011;   // hoop circle centre (z)
+  const a = 1.95;                                         // half-angle → hoop ends wrap forward past the seat mid-line
+  const band = 0.06, bt = 0.024;
+  // legs: front pair straight-ish, back pair raked; all tapered round
+  const fx = hw - 0.055, fz = d / 2 - 0.06, bx = hw - 0.065, bz = -d / 2 + 0.07;
+  for (const s of [-1, 1]) {
+    K.rod(oak, [s * (fx + 0.012), 0, fz + 0.012], [s * fx, sy - 0.05, fz], 0.0125, 0.017, 10);
+    K.rod(oak, [s * (bx + 0.012), 0, bz - 0.03], [s * bx, sy - 0.05, bz], 0.0125, 0.017, 10);
+  }
+  // seat frame (rails) + boucle cushion
+  const ry0 = sy - 0.085, ry1 = sy - 0.045;
+  K.box(oak, -fx, fx, ry0, ry1, fz - 0.011, fz + 0.011, 0.004, 1);
+  K.box(oak, -bx, bx, ry0, ry1, bz - 0.011, bz + 0.011, 0.004, 1);
+  for (const s of [-1, 1]) K.box(oak, s * ((fx + bx) / 2) - 0.011, s * ((fx + bx) / 2) + 0.011, ry0, ry1, bz, fz, 0.004, 1);
+  K.box(seat, -hw + 0.03, hw - 0.03, sy - 0.05, sy, -d / 2 + 0.07, d / 2 - 0.02, 0.025, 3);
+  // low side stretchers
+  for (const s of [-1, 1]) K.rod(oak, [s * (fx + 0.008), 0.17, fz + 0.006], [s * (bx + 0.008), 0.17, bz - 0.017], 0.008, 0.008, 8);
+  // back hoop
+  const hy0 = top - band;
+  K.add(oak, hoopBand(R, a, bt, band), 0, hy0, zc - R);
+  // two back posts (rise from the back legs into the hoop) + two arm posts at the hoop ends
+  const post = (p, r0) => { const x = R * Math.sin(p), z = zc - R * Math.cos(p); K.rod(oak, [x * 0.97, sy - 0.05, z + 0.01], [x, hy0 + 0.01, z], r0, r0 * 0.8, 10); };
+  post(0.62, 0.013); post(-0.62, 0.013);
+  post(a - 0.12, 0.011); post(-(a - 0.12), 0.011);
 }
 
 function chair(K, { w, d, h, P }) { // task chair
@@ -770,7 +832,8 @@ function tall_cabinet(K, { w, d, h, P }) {
   const cab = mat('paint', P.kitchenUpper, { rough: 0.85 }), hdl = mat('black', P.kitchenHandle);
   const H = h, plinth = 0.1, zf = d / 2 - 0.027;
   K.box(m.carcass, -w / 2 + 0.03, w / 2 - 0.03, 0, plinth, -d / 2, zf - 0.07);
-  K.box(m.carcass, -w / 2 + 0.018, w / 2 - 0.018, plinth, H - 0.018, -d / 2, zf - 0.018);
+  K.box(m.carcass, -w / 2 + 0.018, w / 2 - 0.018, plinth, H - 0.018, -d / 2 + 0.012, zf - 0.018);
+  K.box(cab, -w / 2 + 0.018, w / 2 - 0.018, 0, H - 0.018, -d / 2, -d / 2 + 0.012);   // finished back (may be seen from the dining room)
   K.box(cab, -w / 2, -w / 2 + 0.018, 0, H, -d / 2, zf); K.box(cab, w / 2 - 0.018, w / 2, 0, H, -d / 2, zf);
   K.box(cab, -w / 2 + 0.018, w / 2 - 0.018, H - 0.018, H, -d / 2, zf - 0.018);
   const x0 = -w / 2 + 0.018, x1 = w / 2 - 0.018;

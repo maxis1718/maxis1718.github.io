@@ -46,6 +46,15 @@ export const DEFAULT_PALETTE = {
   kitchenLower: '#c7a479', // oak veneer base units
   kitchenUpper: '#efebe4', // warm white matte wall units / tall tower
   kitchenHandle: '#1f1f1f',
+  // round 3 — living / dining set
+  tvConsole: '#cfb08a',    // TV sideboard finish (warm light oak, matte)
+  tvConsolePlinth: '#2e2b28',
+  tvFrame: '#dcc8a8',      // The Frame 75" bezel (beige oak)
+  ledWarm: '#ffb06a',      // 2700 K LED strip / floor glow
+  ledGlow: 2.0,            // emissiveIntensity of ambient LED strips
+  oakWheat: '#d6b688',     // dining table base / chairs (light warm oak)
+  sintered: '#e9e1d2',     // dining table top (travertine-look sintered stone, matte)
+  chairSeat: '#ece6da',    // dining chair seat (warm off-white boucle)
   glow: 1.0,             // emissive intensity multiplier
 };
 
@@ -126,6 +135,86 @@ export function quartzTex() {
     }
   });
 }
+/** travertine-look sintered stone: warm ivory, fine low-contrast striations running along V (rot=false) or U */
+export function sinteredTex(alongU = false) {
+  const t = canvasTex('sintered' + (alongU ? 'U' : 'V'), 1024, (g, w, h) => {
+    g.fillStyle = '#f4f1ec'; g.fillRect(0, 0, w, h);
+    const r = rng(53);
+    // soft broad tonal bands
+    for (let i = 0; i < 26; i++) {
+      const x = r() * w, bw = 8 + r() * 70, a = 0.03 + r() * 0.07, warm = r() < 0.6;
+      g.fillStyle = warm ? `rgba(196,170,132,${a})` : `rgba(255,253,248,${a * 1.4})`;
+      for (const ox of [-w, 0, w]) g.fillRect(x + ox, 0, bw, h);
+    }
+    // fine striations (slightly wavy, wrap-safe)
+    for (let i = 0; i < 340; i++) {
+      const x0 = r() * w, a = 0.05 + r() * 0.11, lw = 0.5 + r() * 1.5, amp = 1 + r() * 3, f = 0.002 + r() * 0.006, ph = r() * 6;
+      g.strokeStyle = r() < 0.75 ? `rgba(150,125,92,${a})` : `rgba(255,255,252,${a * 1.5})`; g.lineWidth = lw;
+      const y0 = r() * h, len = h * (0.25 + r() * 0.75);
+      for (const ox of [-w, 0, w]) for (const oy of [-h, 0]) {
+        g.beginPath();
+        for (let y = y0; y <= y0 + len; y += 12) { const xx = x0 + ox + Math.sin(y * f + ph) * amp; y === y0 ? g.moveTo(xx, y + oy) : g.lineTo(xx, y + oy); }
+        g.stroke();
+      }
+    }
+    // travertine pores: tiny elongated pits along the grain
+    for (let i = 0; i < 700; i++) { g.fillStyle = `rgba(150,128,98,${0.06 + r() * 0.12})`; g.fillRect(r() * w, r() * h, 1 + r() * 1.5, 2 + r() * 7); }
+    // paper-fine noise
+    for (let i = 0; i < 12000; i++) { const v = 200 + r() * 55 | 0; g.fillStyle = `rgba(${v},${v - 6},${v - 14},0.08)`; g.fillRect(r() * w, r() * h, 1.5, 1.5); }
+  });
+  if (t && alongU && !t.userData.rot) { t.center.set(0.5, 0.5); t.rotation = Math.PI / 2; t.userData.rot = true; }
+  return t;
+}
+/** Samsung The Frame "Art Mode" picture: digital white mat + soft wabi-sabi abstract on warm paper (16:9) */
+export function frameArtTex() {
+  return canvasTex('frameart', 1024, (g, w, h) => {
+    g.fillStyle = '#f3efe8'; g.fillRect(0, 0, w, h);                    // mat
+    const r = rng(77);
+    const mx = w * 0.17, my = h * 0.13, aw = w - 2 * mx, ah = h - 2 * my;
+    // inner bevel shadow of the digital mat
+    g.fillStyle = 'rgba(120,105,85,0.18)'; g.fillRect(mx - 3, my - 3, aw + 6, ah + 6);
+    g.save(); g.beginPath(); g.rect(mx, my, aw, ah); g.clip();
+    g.fillStyle = '#e7ddcd'; g.fillRect(mx, my, aw, ah);                 // warm paper
+    for (let i = 0; i < 9000; i++) { const v = 190 + r() * 60 | 0; g.fillStyle = `rgba(${v},${v - 8},${v - 20},0.07)`; g.fillRect(mx + r() * aw, my + r() * ah, 2, 2); }
+    // large soft washes
+    const wash = (x, y, rx, ry, col, a) => { const gr = g.createRadialGradient(x, y, 0, x, y, Math.max(rx, ry)); gr.addColorStop(0, col.replace('A', a)); gr.addColorStop(1, col.replace('A', 0)); g.fillStyle = gr; g.save(); g.translate(x, y); g.scale(rx / Math.max(rx, ry), ry / Math.max(rx, ry)); g.translate(-x, -y); g.beginPath(); g.arc(x, y, Math.max(rx, ry), 0, 6.3); g.fill(); g.restore(); };
+    wash(mx + aw * 0.25, my + ah * 0.7, aw * 0.45, ah * 0.35, 'rgba(201,188,166,A)', 0.55);
+    wash(mx + aw * 0.8, my + ah * 0.25, aw * 0.35, ah * 0.3, 'rgba(236,230,219,A)', 0.8);
+    // muted terracotta / ochre organic shape (irregular blob)
+    const cx = mx + aw * 0.6, cy = my + ah * 0.47, R = ah * 0.27;
+    g.fillStyle = 'rgba(186,121,82,0.86)'; g.beginPath();
+    for (let i = 0; i <= 48; i++) { const a = i / 48 * 6.2832; const rr = R * (1 + 0.07 * Math.sin(a * 3 + 0.6) + 0.04 * Math.sin(a * 7 + 2)); const x = cx + Math.cos(a) * rr * 1.08, y = cy + Math.sin(a) * rr; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+    g.fill();
+    for (let i = 0; i < 2500; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * R; g.fillStyle = `rgba(${r() < 0.5 ? '150,90,60' : '220,170,130'},0.08)`; g.fillRect(cx + Math.cos(a) * d * 1.05, cy + Math.sin(a) * d, 3, 3); }
+    // sand-coloured ground shape at the bottom
+    g.fillStyle = 'rgba(176,160,134,0.75)'; g.beginPath(); g.moveTo(mx, my + ah * 0.82);
+    g.bezierCurveTo(mx + aw * 0.3, my + ah * 0.74, mx + aw * 0.55, my + ah * 0.9, mx + aw, my + ah * 0.8); g.lineTo(mx + aw, my + ah); g.lineTo(mx, my + ah); g.fill();
+    // charcoal brush arc (dry-brush: several thin offset strokes)
+    g.lineCap = 'round';
+    for (let k = 0; k < 9; k++) {
+      g.strokeStyle = `rgba(48,43,38,${0.18 + r() * 0.25})`; g.lineWidth = 2 + r() * 4;
+      g.beginPath(); g.moveTo(mx + aw * 0.14, my + ah * (0.62 + k * 0.006));
+      g.bezierCurveTo(mx + aw * 0.2, my + ah * (0.18 + k * 0.006), mx + aw * 0.42, my + ah * (0.16 + k * 0.005), mx + aw * 0.48, my + ah * (0.36 + k * 0.006)); g.stroke();
+    }
+    g.restore();
+  }, false, 1024, 576);
+}
+/** additive floor-glow gradient for LED strips (black = no light) */
+export function floorGlowTex() {
+  return canvasTex('floorglow', 256, (g, w, h) => {
+    g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
+    const img = g.getImageData(0, 0, w, h), D = img.data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const v = y / (h - 1);                                   // 0 = top of canvas = back (under the cabinet)
+      const fz = v < 0.12 ? 0.75 + 0.25 * (v / 0.12) : Math.exp(-(v - 0.12) * 4.2) * (1 - v) ** 0.6;
+      const u = Math.min(x, w - 1 - x) / (w * 0.5);             // 0 at ends → 1 mid
+      const fx = Math.min(1, u / 0.18) ** 1.6;
+      const k = Math.max(0, Math.min(1, fz * fx)) * 255;
+      const i = (y * w + x) * 4; D[i] = D[i + 1] = D[i + 2] = k; D[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  }, false, 256, 128);
+}
 export function rugTex() {
   return canvasTex('rug', 512, (g, w, h) => {
     g.fillStyle = '#f2efe9'; g.fillRect(0, 0, w, h);
@@ -201,10 +290,13 @@ function baseMat(kind, color, extra, vc) {
     case 'gloss': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.18, metalness: 0.05 }); break;
     case 'mirror': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.03, metalness: 1.0, envMapIntensity: 1.2 }); break;
     case 'glass': m = new THREE.MeshPhysicalMaterial({ ...P, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.6 }); break;
-    case 'emissive': m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1, roughness: 0.6, side: THREE.DoubleSide }); _emissive.add(m); m.userData.baseEmissive = extra.e ?? 1; m.userData.glow = true; break;
+    case 'emissive': m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1, roughness: 0.6, side: THREE.DoubleSide }); _emissive.add(m); m.userData.baseEmissive = extra.e ?? 1; m.userData.glow = true; if (extra.amb) m.userData.ambient = true; break;
     case 'vc': m = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: extra.rough ?? 0.8, metalness: 0, side: extra.ds ? THREE.DoubleSide : THREE.FrontSide }); break;
     case 'art': m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, map: artTex(extra.v || 0) }); break;
     case 'rug': m = new THREE.MeshStandardMaterial({ ...P, roughness: 1, map: rugTex() }); break;
+    case 'sintered': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.85, metalness: 0, map: sinteredTex(!!extra.alongU), envMapIntensity: 0.6 }); worldUV = 1.25; break;
+    case 'frameart': { const t = frameArtTex(); m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0, map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: extra.e ?? 0.05, envMapIntensity: 0.3 }); break; }
+    case 'floorglow': m = new THREE.MeshBasicMaterial({ ...P, map: floorGlowTex(), transparent: true, opacity: extra.opacity ?? 0.9, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }); m.userData.ambient = true; break;
     case 'sheer': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.95, transparent: true, opacity: Math.min(0.35, extra.opacity ?? 0.3), side: THREE.DoubleSide, depthWrite: false, map: fabricTex() }); worldUV = 0.2; break;
     case 'drape': m = new THREE.MeshStandardMaterial({ ...P, roughness: 0.95, side: THREE.DoubleSide, map: fabricTex() }); worldUV = 0.3; break;
     default: m = new THREE.MeshStandardMaterial({ ...P, roughness: extra.rough ?? 0.6, metalness: extra.metal ?? 0 });

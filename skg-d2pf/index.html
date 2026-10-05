@@ -46,6 +46,7 @@
   .toolbar { position: absolute; left: calc(12px + var(--sal)); top: calc(78px + var(--sat)); display: flex; gap: 2px; padding: 4px; border-radius: 14px !important; }
   .tb { appearance: none; border: 0; background: transparent; color: var(--text); font: 500 11px/1 var(--font); letter-spacing: 0.08em;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 50px; height: 50px; border-radius: 11px; cursor: pointer; touch-action: manipulation; }
+  .tb span { white-space: nowrap; }
   .tb svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
   .tb:active { background: rgba(255,255,255,0.12); }
   .tb.on { background: rgba(233,196,143,0.22); color: var(--accent); }
@@ -127,7 +128,7 @@
   #fader { position: fixed; inset: 0; z-index: 5; background: #111; opacity: 0; pointer-events: none; transition: opacity .18s; }
   #fader.on { opacity: 1; }
   #err { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 20; padding: 10px 12px; border-radius: 10px; background: rgba(120,30,30,0.85); font-size: 12px; display: none; }
-  @media (max-width: 420px) { .tb { width: 46px; height: 48px; } .room-card .zh { font-size: 17px; } }
+  @media (max-width: 440px) { .tb { width: min(46px, calc((100vw - 196px) / 5)); height: 48px; letter-spacing: 0; font-size: 10px; } .toolbar { gap: 1px; } .room-card .zh { font-size: 17px; } }
 </style>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/":"./vendor/addons/"}}</script>
 </head>

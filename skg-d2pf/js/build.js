@@ -82,7 +82,7 @@ export function buildHouse(P, M, STYLE) {
 
   // ---------- walls (faces classified per room side) -----------------------
   const acc = { wall: new GeoAcc(), bath: new GeoAcc(), facade: new GeoAcc(), cap: new GeoAcc(), sill: new GeoAcc(),
-    skirt: new GeoAcc(), slab: new GeoAcc(), thresh: new GeoAcc() };
+    skirt: new GeoAcc(), slab: new GeoAcc(), thresh: new GeoAcc(), black: new GeoAcc(), clear: new GeoAcc() };
   const ao = new GeoAcc(true);
   const aoW = STYLE.ao.width;
   const windowAt = (w) => P.windows.find((win) => win.x0 >= w.x0 - 0.05 && win.x1 <= w.x1 + 0.05 && win.z0 >= w.z0 - 0.05 && win.z1 <= w.z1 + 0.05);
@@ -98,6 +98,19 @@ export function buildHouse(P, M, STYLE) {
     ];
   }
   const pt = (f, u, off) => (f.axis === 'x' ? [f.at + f.sign * off, u] : [u, f.at + f.sign * off]);
+  // u-intervals of face f in [u0,u1] NOT covered by a PLAN feature (feature walls get no skirting / AO strips)
+  const FEATS = P.features || [];
+  function minusFeatures(f, u0, u1) {
+    let out = [[u0, u1]];
+    for (const ft of FEATS) {
+      const flush = f.axis === 'x' ? (f.sign < 0 ? Math.abs(ft.x1 - f.at) < 0.03 : Math.abs(ft.x0 - f.at) < 0.03)
+        : (f.sign < 0 ? Math.abs(ft.z1 - f.at) < 0.03 : Math.abs(ft.z0 - f.at) < 0.03);
+      if (!flush) continue;
+      const c0 = (f.axis === 'x' ? ft.z0 : ft.x0) - 0.01, c1 = (f.axis === 'x' ? ft.z1 : ft.x1) + 0.01;
+      out = out.flatMap(([a, b]) => (c1 <= a || c0 >= b) ? [[a, b]] : [[a, Math.max(a, c0)], [Math.min(b, c1), b]].filter(([p, q]) => q - p > 0.01));
+    }
+    return out;
+  }
   function sampleRoom(f, u) {
     const [x, z] = pt(f, u, 0.05);
     const r = L.at(x, z); if (r) return r;
@@ -135,16 +148,17 @@ export function buildHouse(P, M, STYLE) {
         if (cls === 'facade' && w.y0 < EPS && !run.room) acc.slab.face(f.axis, f.sign, f.at, run.u0, run.u1, -0.3, 0);
         if (!run.room || cls === 'facade') continue;
         const inRoom = (() => { const [x, z] = pt(f, (run.u0 + run.u1) / 2, 0.05); return !!L.at(x, z); })();
-        // skirting
         const fl = run.room.floor;
+        for (const [su0, su1] of minusFeatures(f, run.u0, run.u1)) {
+        // skirting
         if (w.y0 < EPS && inRoom && (fl === 'wood' || fl === 'tile' || fl === 'lobby')) {
           const t = STYLE.skirting.t, h = STYLE.skirting.h;
           if (f.axis === 'x') {
             const a = f.at, b = f.at + f.sign * t;
-            acc.skirt.box(Math.min(a, b), 0, run.u0, Math.max(a, b), h, run.u1, { ny: true });
+            acc.skirt.box(Math.min(a, b), 0, su0, Math.max(a, b), h, su1, { ny: true });
           } else {
             const a = f.at, b = f.at + f.sign * t;
-            acc.skirt.box(run.u0, 0, Math.min(a, b), run.u1, h, Math.max(a, b), { ny: true });
+            acc.skirt.box(su0, 0, Math.min(a, b), su1, h, Math.max(a, b), { ny: true });
           }
         }
         // fake AO strips (floor + ceiling)
@@ -157,10 +171,10 @@ export function buildHouse(P, M, STYLE) {
               let A, B, Cc, D;
               if (f.axis === 'x') {
                 const xa = f.at + s * oa, xb = f.at + s * ob;
-                A = [xa, y, run.u0]; B = [xa, y, run.u1]; Cc = [xb, y, run.u1]; D = [xb, y, run.u0];
+                A = [xa, y, su0]; B = [xa, y, su1]; Cc = [xb, y, su1]; D = [xb, y, su0];
               } else {
                 const za = f.at + s * oa, zb = f.at + s * ob;
-                A = [run.u0, y, za]; B = [run.u1, y, za]; Cc = [run.u1, y, zb]; D = [run.u0, y, zb];
+                A = [su0, y, za]; B = [su1, y, za]; Cc = [su1, y, zb]; D = [su0, y, zb];
               }
               const cols = [[0, 0, 0, aa], [0, 0, 0, aa], [0, 0, 0, ab], [0, 0, 0, ab]];
               // fix winding so the quad faces up (floor) or down (ceiling)
@@ -174,6 +188,7 @@ export function buildHouse(P, M, STYLE) {
           if (w.y0 < EPS && fl !== 'bath') strip(0.002, true, STYLE.ao.floor);
           if (fl === 'bath' && w.y0 < EPS) strip(0.002, true, STYLE.ao.floor * 0.6);
           if (run.room.ceiling !== false && w.y1 >= run.room.ceilingH - 0.01) strip(run.room.ceilingH - 0.002, false, STYLE.ao.ceiling);
+        }
         }
       }
     }
@@ -198,17 +213,21 @@ export function buildHouse(P, M, STYLE) {
   const glassAcc = new GeoAcc(), frameAcc = new GeoAcc();
   const FW = STYLE.frame.w, FD = 0.06;
   for (const win of P.windows) {
+    const part = win.kind === 'partition';
     const alongX = (win.x1 - win.x0) >= (win.z1 - win.z0);
     const c = alongX ? (win.z0 + win.z1) / 2 : (win.x0 + win.x1) / 2;
     const a0 = alongX ? win.x0 : win.z0, a1 = alongX ? win.x1 : win.z1;
-    const boxA = (u0, u1, y0, y1, d = FD) => alongX ? frameAcc.box(u0, y0, c - d / 2, u1, y1, c + d / 2) : frameAcc.box(c - d / 2, y0, u0, c + d / 2, y1, u1);
+    const fa = part ? acc.black : frameAcc, ga = part ? acc.clear : glassAcc;
+    const fw = part ? STYLE.partition.frameW : FW, fd = part ? STYLE.partition.frameD : FD;
+    const boxA = (u0, u1, y0, y1, d = fd) => alongX ? fa.box(u0, y0, c - d / 2, u1, y1, c + d / 2) : fa.box(c - d / 2, y0, u0, c + d / 2, y1, u1);
     // glass (two faces)
-    if (alongX) { glassAcc.face('z', 1, c + 0.003, a0, a1, win.y0, win.y1); glassAcc.face('z', -1, c - 0.003, a0, a1, win.y0, win.y1); }
-    else { glassAcc.face('x', 1, c + 0.003, a0, a1, win.y0, win.y1); glassAcc.face('x', -1, c - 0.003, a0, a1, win.y0, win.y1); }
-    boxA(a0, a1, win.y0, win.y0 + FW); boxA(a0, a1, win.y1 - FW, win.y1);
-    boxA(a0, a0 + FW, win.y0, win.y1); boxA(a1 - FW, a1, win.y0, win.y1);
+    if (alongX) { ga.face('z', 1, c + 0.003, a0, a1, win.y0, win.y1); ga.face('z', -1, c - 0.003, a0, a1, win.y0, win.y1); }
+    else { ga.face('x', 1, c + 0.003, a0, a1, win.y0, win.y1); ga.face('x', -1, c - 0.003, a0, a1, win.y0, win.y1); }
+    boxA(a0, a1, win.y0, win.y0 + fw); boxA(a0, a1, win.y1 - fw, win.y1);
+    boxA(a0, a0 + fw, win.y0, win.y1); boxA(a1 - fw, a1, win.y0, win.y1);
     const n = Math.max(1, win.frames || 1);
-    for (let i = 1; i < n; i++) { const u = a0 + ((a1 - a0) * i) / n; boxA(u - FW * 0.6, u + FW * 0.6, win.y0, win.y1); }
+    for (let i = 1; i < n; i++) { const u = a0 + ((a1 - a0) * i) / n; boxA(u - fw * (part ? 0.5 : 0.6), u + fw * (part ? 0.5 : 0.6), win.y0, win.y1); }
+    if (part) { if (win.y0 < 1.0) colliders.push({ x0: win.x0, z0: win.z0, x1: win.x1, z1: win.z1, src: 'partition' }); continue; }
     if (win.y1 - win.y0 > 1.5) { const y = win.y1 - 0.5; boxA(a0, a1, y - FW * 0.5, y + FW * 0.5); }   // top-hung vent transom
     // interior stone sill board
     const room = L.at(...(alongX ? [(a0 + a1) / 2, c + 0.3] : [c + 0.3, (a0 + a1) / 2])) ? 1 : -1;
@@ -247,6 +266,15 @@ export function buildHouse(P, M, STYLE) {
       mbox(a0, a1, 0, 0.07, 0.07);                 // base shoe
     }
     colliders.push({ x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1, src: 'rail' });
+  }
+
+  // ---------- feature walls (PLAN.features) --------------------------------
+  const features = [], washers = [];
+  for (const ft of FEATS) {
+    const out = buildFeature(ft, P, M, STYLE, L, ceilingGroup, root);
+    if (!out) continue;
+    features.push(out); colliders.push(out.collider);
+    if (out.washer) washers.push(out.washer);
   }
 
   // ---------- ceilings, downlights, light spots -----------------------------
@@ -305,6 +333,13 @@ export function buildHouse(P, M, STYLE) {
       }
     }
   }
+  // dining has no pendant → a ceiling-light anchor right above each dining table (preferred by the evening lights)
+  for (const f of P.furniture || []) {
+    if (f.type !== 'dining_table') continue;
+    const r = L.at(f.x, f.z); const ch = r ? r.ceilingH : H;
+    for (let i = spots.length - 1; i >= 0; i--) if (Math.hypot(spots[i].x - f.x, spots[i].z - f.z) < 1.3) spots.splice(i, 1);
+    spots.unshift({ room: r ? r.id : null, x: f.x, z: f.z, y: ch - 0.4, prio: true });
+  }
   const ceilMesh = mergeToMesh(ceilGeos, M.ceiling, { cast: true, name: 'ceiling' });
   ceilingGroup.add(ceilMesh);
   // the merged downlight geometry: winding check (we pushed raw), make sure it faces down
@@ -362,6 +397,8 @@ export function buildHouse(P, M, STYLE) {
   add(acc.slab, M.slab, { name: 'slab' });
   add(acc.thresh, M.sill, { name: 'thresholds' });
   add(frameAcc, M.frame, { cast: true, name: 'frames' });
+  add(acc.black, M.frameBlack, { cast: true, name: 'framesBlack' });
+  const cg = add(acc.clear, M.glassClear, { name: 'glassClear', receive: false }); if (cg) cg.renderOrder = 3;
   add(frameAcc2, M.doorFrame, { cast: true, name: 'doorFrames' });
   add(railMetalAcc, M.railMetal, { cast: true, name: 'railMetal' });
   const gm = add(glassAcc, M.glass, { name: 'glass', receive: false }); if (gm) gm.renderOrder = 3;
@@ -369,7 +406,7 @@ export function buildHouse(P, M, STYLE) {
   const aoMesh = add(ao, M.ao, { name: 'aoStrips', receive: false }); if (aoMesh) aoMesh.renderOrder = 1;
   root.add(ceilingGroup); root.add(roofGroup);
 
-  return { root, ceilingGroup, roofGroup, colliders, doors, spots, lookup: L, aoMesh, capMesh };
+  return { root, ceilingGroup, roofGroup, colliders, doors, spots, lookup: L, aoMesh, capMesh, features, washers };
 }
 
 // ── swing door ──────────────────────────────────────────────────────────────
@@ -460,7 +497,96 @@ function buildSwing(d, P, M, STYLE, frameAcc, threshAcc) {
   };
 }
 
+// ── feature wall (PLAN.features) ───────────────────────────────────────────
+function aoQuad(acc, A, B, Cc, D, aa, ab, up) {      // floor/ceiling AO quad A-B (edge, alpha aa) → D-C (alpha ab)
+  const cols = [[0, 0, 0, aa], [0, 0, 0, aa], [0, 0, 0, ab], [0, 0, 0, ab]];
+  const e1 = [B[0] - A[0], B[2] - A[2]], e2 = [D[0] - A[0], D[2] - A[2]];
+  const cy = e1[1] * e2[0] - e1[0] * e2[1];
+  if ((cy > 0) === up) acc.quad(A, B, Cc, D, [0, up ? 1 : -1, 0], [[0, 0], [1, 0], [1, 1], [0, 1]], cols);
+  else acc.quad(A, D, Cc, B, [0, up ? 1 : -1, 0], [[0, 0], [0, 1], [1, 1], [1, 0]], [cols[0], cols[3], cols[2], cols[1]]);
+}
+
+function buildFeature(ft, P, M, STYLE, L, ceilingGroup, root) {
+  const H = P.ceiling, FWc = STYLE.featureWall, g = FWc.gapW;
+  const thinX = (ft.x1 - ft.x0) < (ft.z1 - ft.z0);
+  const axis = thinX ? 'x' : 'z';
+  const a0 = thinX ? ft.z0 : ft.x0, a1 = thinX ? ft.z1 : ft.x1, am = (a0 + a1) / 2;
+  const at = (off) => thinX ? [off, am] : [am, off];
+  // front = the side that faces a room
+  const sign = L.at(...at((thinX ? ft.x0 : ft.z0) - 0.12)) ? -1 : 1;
+  const front = thinX ? (sign < 0 ? ft.x0 : ft.x1) : (sign < 0 ? ft.z0 : ft.z1);
+  const back = thinX ? (sign < 0 ? ft.x1 : ft.x0) : (sign < 0 ? ft.z1 : ft.z0);
+  const room = L.at(...at(front + sign * 0.2));
+  const y0 = ft.y0 || 0, top = Math.min(ft.y1 ?? H, room ? room.ceilingH : H);
+  const u0 = a0 + g, u1 = a1 - g, yt = top - g;
+  const group = new THREE.Group(); group.name = 'feature_' + ft.id;
+
+  // front surface: one non-repeating texture, uv 0..1 over the whole panel
+  const fA = new GeoAcc(); fA.face(axis, sign, front, u0, u1, y0, yt);
+  const fg = fA.geometry(), pos = fg.attributes.position, uv = fg.attributes.uv;
+  for (let i = 0; i < uv.count; i++) {
+    const along = thinX ? pos.getZ(i) : pos.getX(i);
+    const u = (along - a0) / (a1 - a0);
+    uv.setXY(i, sign * (thinX ? -1 : 1) > 0 ? u : 1 - u, (pos.getY(i) - y0) / (top - y0));
+  }
+  const face = new THREE.Mesh(fg, M.makeFeatureWall(a1 - a0, top - y0));
+  face.castShadow = true; face.receiveShadow = true; face.name = 'featureFace';
+  // exposed timber edges (ends + top)
+  const eA = new GeoAcc(), lo = Math.min(front, back), hi = Math.max(front, back);
+  if (thinX) eA.box(lo, y0, u0, hi, yt, u1, { px: true, nx: true, ny: true });
+  else eA.box(u0, y0, lo, u1, yt, hi, { pz: true, nz: true, ny: true });
+  const edge = new THREE.Mesh(eA.geometry(), M.featureEdge); edge.castShadow = true; edge.receiveShadow = true;
+  // 8 mm shadow-gap reveal (dark back strip) at the ceiling and both ends
+  const gA = new GeoAcc(), gp = back + sign * 0.003;
+  gA.face(axis, sign, gp, a0, a1, yt, top); gA.face(axis, sign, gp, a0, u0, y0, yt); gA.face(axis, sign, gp, u1, a1, y0, yt);
+  const gap = new THREE.Mesh(gA.geometry(), M.gap); gap.receiveShadow = false;
+  // soft contact shadow on the floor in front of the panel (replaces the skirting AO strip)
+  const aoA = new GeoAcc(true), yF = y0 + 0.002;
+  const P2 = (o, u) => thinX ? [front + sign * o, yF, u] : [u, yF, front + sign * o];
+  aoQuad(aoA, P2(0, u0), P2(0, u1), P2(0.06, u1), P2(0.06, u0), STYLE.ao.floor, STYLE.ao.floor * 0.45, true);
+  aoQuad(aoA, P2(0.06, u0), P2(0.06, u1), P2(0.3, u1), P2(0.3, u0), STYLE.ao.floor * 0.45, 0, true);
+  const aoM = new THREE.Mesh(aoA.geometry(), M.ao); aoM.renderOrder = 1;
+  group.add(face, edge, gap, aoM);
+  group.traverse((o) => { o.matrixAutoUpdate = false; o.updateMatrix(); });
+  root.add(group);
+
+  let washer = null;
+  if (ft.washer) {
+    const W = STYLE.washer, cpos = front + sign * W.offset, yc = room ? room.ceilingH : H;
+    const v0 = a0 + 0.05, v1 = a1 - 0.05;
+    const sA = new GeoAcc(), bA = new GeoAcc();
+    if (thinX) { sA.face('y', -1, yc - 0.0016, cpos - W.slotW / 2, cpos + W.slotW / 2, v0, v1); bA.face('y', -1, yc - 0.0008, cpos - W.slotW / 2 - 0.008, cpos + W.slotW / 2 + 0.008, v0 - 0.008, v1 + 0.008); }
+    else { sA.face('y', -1, yc - 0.0016, v0, v1, cpos - W.slotW / 2, cpos + W.slotW / 2); bA.face('y', -1, yc - 0.0008, v0 - 0.008, v1 + 0.008, cpos - W.slotW / 2 - 0.008, cpos + W.slotW / 2 + 0.008); }
+    const slot = new THREE.Mesh(sA.geometry(), M.washerSlot); slot.name = 'washerSlot';
+    const rim = new THREE.Mesh(bA.geometry(), M.gap); rim.name = 'washerRim';
+    for (const m of [slot, rim]) { m.matrixAutoUpdate = false; m.updateMatrix(); ceilingGroup.add(m); }
+    // additive grazing wash on the top part of the textured wall
+    const wA = new GeoAcc(); wA.face(axis, sign, front + sign * 0.002, u0, u1, Math.max(y0, yt - W.glowH), yt);
+    const wg = wA.geometry(), wp = wg.attributes.position, wuv = wg.attributes.uv;
+    for (let i = 0; i < wuv.count; i++) {
+      const along = thinX ? wp.getZ(i) : wp.getX(i);
+      wuv.setXY(i, (along - u0) / (u1 - u0), (wp.getY(i) - (yt - W.glowH)) / W.glowH);
+    }
+    const glow = new THREE.Mesh(wg, M.washerGlow); glow.renderOrder = 2; glow.name = 'washerGlow';
+    glow.matrixAutoUpdate = false; glow.updateMatrix(); glow.visible = false;
+    root.add(glow);
+    // grazing spot from the slot, aimed down the wall face → lights wall + console, never the ceiling
+    const light = new THREE.SpotLight(W.color, 0, 4.2, 1.15, 0.95, 1.6);
+    const lp = (o, y) => thinX ? [front + sign * o, y, am] : [am, y, front + sign * o];
+    light.position.set(...lp(0.28, yc - 0.06)); light.target.position.set(...lp(0.02, 0.7));
+    light.castShadow = false; light.visible = false; light.name = 'washerLight';
+    light.add(light.target); light.target.position.sub(light.position);
+    washer = { id: ft.id, slot, glow, light };
+  }
+  return { id: ft.id, group, collider: { x0: ft.x0, z0: ft.z0, x1: ft.x1, z1: ft.z1, src: 'feature' }, washer };
+}
+
 // ── sliding door ────────────────────────────────────────────────────────────
+function roomAtP(P, x, z) {
+  let best = null;
+  for (const r of P.rooms) if (pointInPoly(x, z, r.poly) && (!best || r.area < best.area)) best = r;
+  return best;
+}
 function buildSlide(d, P, M, STYLE, frameAcc, acc) {
   const group = new THREE.Group(); group.name = 'slide_' + d.id;
   const alongX = (d.x1 - d.x0) >= (d.z1 - d.z0);
@@ -488,8 +614,35 @@ function buildSlide(d, P, M, STYLE, frameAcc, acc) {
     if (w0 > o1 && w0 - o1 < 0.06) o1 = w0;
     if (w1 < o0 && o0 - w1 < 0.06) o0 = w1;
   }
+  // interior glass slider (rooms on both sides, neither a balcony) → slim matte-black frame + clear glass
+  const side = (off) => { const [x, z] = alongX ? [(o0 + o1) / 2, c + off] : [c + off, (o0 + o1) / 2]; return roomAtP(P, x, z); };
+  const sA = side(-0.3), sB = side(0.3);
+  const outdoor = (r) => !r || ['balcony', 'ledge', 'service'].includes(r.floor);
+  const slim = glass && ((!outdoor(sA) && !outdoor(sB)) || STYLE.partition.balconySliders);
+  const fAcc = slim ? acc.black : frameAcc, frameMat = slim ? M.frameBlack : M.frame, glassMat = slim ? M.glassClear : M.glass;
+  const FW = slim ? STYLE.partition.frameW : STYLE.frame.w;
+
   const n = Math.max(1, d.panels || 1);
-  const ov = 0.04, pw = (o1 - o0) / n + (n > 1 ? ov : 0);
+  const ov = 0.04;
+  let pw = (o1 - o0) / n + (n > 1 ? ov : 0);
+  // single panel: slide toward the side whose wall hides it; a glass panel slides on the surface instead of
+  // disappearing into masonry (track on the room-side face of that wall)
+  let single = null;
+  if (n === 1) {
+    const travel = pw - 0.12;
+    const solidAt = (u) => { const [x, z] = alongX ? [u, c] : [c, u]; return P.walls.find((w) => w.y0 < 0.5 && w.y1 > 1.8 && x > w.x0 && x < w.x1 && z > w.z0 && z < w.z1); };
+    const cover = (sgn) => { let k = 0; for (let t = 0.05; t < travel; t += 0.05) if (solidAt(sgn < 0 ? o0 - t : o1 + t)) k++; return k; };
+    const sgn = cover(-1) >= cover(1) ? -1 : 1;
+    single = { sgn, travel, dz: 0, surface: false };
+    if (glass) {
+      const w = solidAt(sgn < 0 ? o0 - 0.15 : o1 + 0.15);
+      if (w) {
+        const wc0 = alongX ? w.z0 : w.x0, wc1 = alongX ? w.z1 : w.x1;
+        const cand = [wc0 - 0.026, wc1 + 0.026].sort((p, q) => Math.abs(p - c) - Math.abs(q - c))[0];
+        single.dz = cand - c; single.surface = true; single.travel = pw; pw += 0.05;
+      }
+    }
+  }
   // header above door if no wall covers it
   const covered = P.walls.some((w) => w.y0 >= h - 0.06 && (alongX ? (w.x0 <= (o0 + o1) / 2 && w.x1 >= (o0 + o1) / 2 && w.z0 <= c && w.z1 >= c) : (w.z0 <= (o0 + o1) / 2 && w.z1 >= (o0 + o1) / 2 && w.x0 <= c && w.x1 >= c)));
   if (!covered && h < H - 0.01) {
@@ -501,67 +654,60 @@ function buildSlide(d, P, M, STYLE, frameAcc, acc) {
   { const d0 = alongX ? d.z0 : d.x0, d1 = alongX ? d.z1 : d.x1;
     if (alongX) acc.thresh.box(o0, -0.3, d0, o1, 0.006, d1, { ny: true }); else acc.thresh.box(d0, -0.3, o0, d1, 0.006, o1, { ny: true }); }
   // frame around opening (head + jambs) for glass doors
-  const FW = STYLE.frame.w;
-  const fbox = (u0, u1, y0, y1, w0, w1) => alongX ? frameAcc.box(u0, y0, w0, u1, y1, w1) : frameAcc.box(w0, y0, u0, w1, y1, u1);
+  const fbox = (u0, u1, y0, y1, w0, w1) => alongX ? fAcc.box(u0, y0, w0, u1, y1, w1) : fAcc.box(w0, y0, u0, w1, y1, u1);
   if (glass) {
-    fbox(o0 - 0.0, o0 + 0.03, 0, h, c - 0.06, c + 0.06);
-    fbox(o1 - 0.03, o1, 0, h, c - 0.06, c + 0.06);
-    fbox(o0, o1, h - 0.04, h, c - 0.06, c + 0.06);
+    const jw = slim ? 0.02 : 0.03, jd = slim ? 0.03 : 0.06;
+    fbox(o0, o0 + jw, 0, h, c - jd, c + jd);
+    fbox(o1 - jw, o1, 0, h, c - jd, c + jd);
+    fbox(o0, o1, h - (slim ? 0.025 : 0.04), h, c - jd, c + jd);
+    if (single && single.surface) {     // surface top track over opening + parking zone
+      const cc = c + single.dz, t0 = single.sgn < 0 ? o0 - single.travel - 0.03 : o0 - 0.03, t1 = single.sgn < 0 ? o1 + 0.03 : o1 + single.travel + 0.03;
+      fbox(t0, t1, h - 0.03, h + 0.03, cc - 0.022, cc + 0.022);
+    }
   }
   const panels = [];
   for (let i = 0; i < n; i++) {
     const pg = new THREE.Group();
     const fa = new GeoAcc(), ga = new GeoAcc();
     const track = n === 1 ? 0 : n === 2 ? (i === 0 ? -1 : 1) : ((i === 0 || i === n - 1) ? -1 : 1);
-    const dz = track * 0.022, th = glass ? 0.035 : 0.04;
+    const dz = single ? single.dz : track * 0.022, th = glass ? (slim ? 0.03 : 0.035) : 0.04;
+    const top = single && single.surface ? h - 0.03 : h - 0.04;
     // panel local: u from 0..pw, centred on depth 0
     const pb = (u0, u1, y0, y1, acc2, dd = th) => alongX ? acc2.box(u0, y0, -dd / 2, u1, y1, dd / 2) : acc2.box(-dd / 2, y0, u0, dd / 2, y1, u1);
     if (glass) {
-      pb(0, FW, 0.01, h - 0.04, fa); pb(pw - FW, pw, 0.01, h - 0.04, fa);
-      pb(0, pw, 0.01, 0.01 + FW * 1.4, fa); pb(0, pw, h - 0.04 - FW, h - 0.04, fa);
-      if (alongX) { ga.face('z', 1, 0.004, FW, pw - FW, 0.01 + FW, h - 0.04 - FW); ga.face('z', -1, -0.004, FW, pw - FW, 0.01 + FW, h - 0.04 - FW); }
-      else { ga.face('x', 1, 0.004, FW, pw - FW, 0.01 + FW, h - 0.04 - FW); ga.face('x', -1, -0.004, FW, pw - FW, 0.01 + FW, h - 0.04 - FW); }
-      // pull handle
-      const hu = (i < n / 2) ? pw - 0.06 : 0.04;
-      pb(hu, hu + 0.02, 0.9, 1.25, fa, th + 0.05);
+      pb(0, FW, 0.01, top, fa); pb(pw - FW, pw, 0.01, top, fa);
+      pb(0, pw, 0.01, 0.01 + FW * 1.4, fa); pb(0, pw, top - FW, top, fa);
+      if (alongX) { ga.face('z', 1, 0.004, FW, pw - FW, 0.01 + FW, top - FW); ga.face('z', -1, -0.004, FW, pw - FW, 0.01 + FW, top - FW); }
+      else { ga.face('x', 1, 0.004, FW, pw - FW, 0.01 + FW, top - FW); ga.face('x', -1, -0.004, FW, pw - FW, 0.01 + FW, top - FW); }
+      // pull handle (slim: long thin black bar)
+      const hu = single ? (single.sgn < 0 ? pw - 0.07 : 0.05) : (i < n / 2) ? pw - 0.06 : 0.04;
+      if (slim) pb(hu, hu + 0.014, 0.75, 1.45, fa, th + 0.06); else pb(hu, hu + 0.02, 0.9, 1.25, fa, th + 0.05);
     } else {
       pb(0, pw, 0.01, h - 0.01, fa);
       const hu = 0.06; pb(hu, hu + 0.015, 0.85, 1.15, fa, th + 0.03);
     }
-    const fm = new THREE.Mesh(fa.geometry(), glass ? M.frame : M.slideOpaque);
+    const fm = new THREE.Mesh(fa.geometry(), glass ? frameMat : M.slideOpaque);
     fm.castShadow = false; fm.receiveShadow = true;
     pg.add(fm);
-    if (!ga.empty) { const gm = new THREE.Mesh(ga.geometry(), M.glass); gm.renderOrder = 3; pg.add(gm); }
-    const closedU = o0 + i * ((o1 - o0) / n) - (n > 1 && i > 0 ? ov / 2 : 0);
+    if (!ga.empty) { const gm = new THREE.Mesh(ga.geometry(), glassMat); gm.renderOrder = 3; pg.add(gm); }
+    let closedU = o0 + i * ((o1 - o0) / n) - (n > 1 && i > 0 ? ov / 2 : 0);
     let openU = closedU;
-    if (n === 1) {
-      // slide toward the side with more wall (pocket)
-      // slide toward the side where wall hides the panel (pocket); test coverage of the open footprint
-      const travel = pw - 0.12;
-      const cover = (sgn) => {
-        let k = 0;
-        for (let t = 0.05; t < travel; t += 0.05) {
-          const u = sgn < 0 ? o0 - t : o1 + t;
-          const [x, z] = alongX ? [u, c] : [c, u];
-          if (P.walls.some((w) => w.y0 < 0.5 && w.y1 > 1.8 && x > w.x0 && x < w.x1 && z > w.z0 && z < w.z1)) k++;
-        }
-        return k;
-      };
-      openU = cover(-1) >= cover(1) ? closedU - travel : closedU + travel;
+    if (single) {
+      if (single.surface) closedU = o0 - 0.025;
+      openU = closedU + single.sgn * single.travel;
     } else if (n === 2) {
       openU = i === 0 ? closedU : o0;   // panel 1 slides over panel 0
     } else {
-      const half = n / 2;
       if (i === 0 || i === n - 1) openU = closedU;
-      else if (i < half) openU = o0 + (i - 0) * 0.0 + 0.0;                    // stack over first panel
-      else openU = o1 - pw;                                                   // stack over last panel
+      else if (i < n / 2) openU = o0;                                       // stack over first panel
+      else openU = o1 - pw;                                                 // stack over last panel
     }
     if (alongX) pg.position.set(closedU, 0, c + dz); else pg.position.set(c + dz, 0, closedU);
     group.add(pg);
     panels.push({ g: pg, closedU, openU, pw, dz });
   }
   return {
-    type: 'slide', id: d.id, group, panels, alongX, c, open: 0, vel: 0, target: 0,
+    type: 'slide', id: d.id, group, panels, alongX, c, open: 0, vel: 0, target: 0, slim,
     center: alongX ? [(o0 + o1) / 2, c] : [c, (o0 + o1) / 2], seg: [o0, o1], depth: alongX ? d.z1 - d.z0 : d.x1 - d.x0,
   };
 }

@@ -59,7 +59,8 @@ const sky = makeSky(); scene.add(sky); sky.position.copy(CENTER);
 const exterior = makeCity(STYLE, CENTER); scene.add(exterior);
 const sun = makeSun(B, MOBILE); scene.add(sun, sun.target);
 const hemi = new THREE.HemisphereLight('#fff', '#fff', 0.5); scene.add(hemi);
-const iLights = makeInteriorLights(6); for (const l of iLights) scene.add(l);
+const iLights = makeInteriorLights(Math.max(3, 6 - house.washers.length)); for (const l of iLights) scene.add(l);   // ≤ 6 point lights incl. washers
+for (const w of house.washers) scene.add(w.light);
 scene.fog = new THREE.Fog('#cfdde8', 80, 700);
 
 // ── furniture (async; graceful fallback) ───────────────────────────────────
@@ -111,13 +112,15 @@ async function loadFurniture() {
       furnColliders.push({ x0: item.x - hw, x1: item.x + hw, z0: item.z - hd, z1: item.z + hd, src: 'furn:' + item.type });
     }
   }
+  collectAmbient(furnGroup);
   furnGroup.traverse((o) => {
-    if (!o.isMesh) return;
+    if (!o.isMesh || o.userData.ambientGlow) return;
     for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
       if (m && m.emissive && (m.emissive.r + m.emissive.g + m.emissive.b) > 0.01 && !glowMats.includes(m)) { m.userData.baseEI = m.emissiveIntensity; glowMats.push(m); }
     }
   });
   applyLampGlow();
+  applyAmbient();
   if (!params.has('nobatch')) batchStatic(furnGroup);
   furnitureSource = mod ? `module (${ok} ok, ${fb} placeholder)` : `placeholder (${fb})`;
   rebuildStatic();
@@ -132,7 +135,7 @@ function batchStatic(group) {
   const buckets = new Map(), keep = [];
   group.traverse((o) => {
     if (!o.isMesh) return;
-    if (o.isInstancedMesh || o.isSkinnedMesh || Array.isArray(o.material) || (o.geometry.groups && o.geometry.groups.length > 1) || !o.visible) { keep.push(o); return; }
+    if (o.userData.ambientGlow || o.isInstancedMesh || o.isSkinnedMesh || Array.isArray(o.material) || (o.geometry.groups && o.geometry.groups.length > 1) || !o.visible) { keep.push(o); return; }
     const g = o.geometry, attrs = Object.keys(g.attributes).sort().join(',');
     const key = `${o.material.uuid}|${attrs}|${g.index ? 1 : 0}|${o.castShadow ? 1 : 0}${o.receiveShadow ? 1 : 0}|${o.renderOrder}`;
     if (!buckets.has(key)) buckets.set(key, []);
@@ -155,6 +158,48 @@ function batchStatic(group) {
   for (const o of keep) { const m = o.matrixWorld.clone(); o.removeFromParent(); m.decompose(o.position, o.quaternion, o.scale); o.updateMatrix(); out.add(o); }
   group.clear(); group.add(out);
   console.info(`[house] furniture batched: ${merged} meshes → ${buckets.size} draws (+${keep.length} kept)`);
+}
+
+// ── 氛圍燈 ambient lighting: feature-wall washer + furniture meshes tagged userData.ambientGlow ──
+// Default per theme (THEMES[x].ambient.on), user toggle any time, ~0.4 s fade.
+const ambientItems = [];
+let ambientOn = false, ambientCur = 0;
+function collectAmbient(group) {
+  group.traverse((o) => {
+    if (!o.isMesh) return;
+    let tagged = false;
+    for (let a = o; a && a !== group; a = a.parent) if (a.userData && a.userData.ambientGlow) { tagged = true; break; }
+    if (!tagged) return;
+    o.userData.ambientGlow = true;
+    const mat = (Array.isArray(o.material) ? o.material[0] : o.material).clone();   // private copy → fade independently
+    o.material = mat;
+    ambientItems.push({ mesh: o, mat, ei: mat.emissiveIntensity ?? 0, op: mat.opacity, col: mat.color ? mat.color.clone() : null,
+      basic: !mat.emissive, transp: !!mat.transparent });
+  });
+}
+const _off = new THREE.Color(STYLE.washer.slotOff), _on = new THREE.Color(), _tmp = new THREE.Color();
+function applyAmbient() {
+  const A = (THEMES[currentTheme] || THEMES.day).ambient || { slot: 1, wallGlow: 0.5, light: 2, furniture: 1 };
+  const f = ambientCur, k = f * f * (3 - 2 * f);   // smoothstep
+  _on.set(STYLE.washer.color).multiplyScalar(A.slot);
+  M.washerSlot.color.copy(_tmp.copy(_off).lerp(_on, k));
+  M.washerGlow.opacity = A.wallGlow * k;
+  for (const w of house.washers) { w.glow.visible = k > 0.002; w.light.intensity = A.light * k; w.light.visible = k > 0.002; }
+  for (const it of ambientItems) {
+    if (it.basic) { if (it.transp) it.mat.opacity = it.op * k * A.furniture; else if (it.col) it.mat.color.copy(_tmp.copy(it.col).multiplyScalar(Math.max(0.12, k * A.furniture))); }
+    else { it.mat.emissiveIntensity = it.ei * k * A.furniture; if (it.transp) it.mat.opacity = it.op * Math.max(k, 0); }
+    it.mesh.visible = it.transp ? k > 0.002 : true;
+  }
+}
+function setAmbient(on, instant = false) {
+  ambientOn = !!on; if (instant) ambientCur = ambientOn ? 1 : 0;
+  hud.setAmbient(ambientOn); applyAmbient();
+}
+function updateAmbient(dt) {
+  const t = ambientOn ? 1 : 0;
+  if (ambientCur === t) return;
+  ambientCur = t > ambientCur ? Math.min(1, ambientCur + dt / 0.4) : Math.max(0, ambientCur - dt / 0.4);
+  applyAmbient();
 }
 
 // ── colliders ──────────────────────────────────────────────────────────────
@@ -192,7 +237,7 @@ let tween = null;
 const foyer = P.rooms.find((r) => r.id === 'foyer');
 // start: north end of the entrance hall, looking north-west across kitchen/dining to the living room + balcony
 const START = params.has('start') ? (([x, z, y]) => ({ x, z, yaw: y, pitch: -4 }))(params.get('start').split(',').map(Number))
-  : foyer ? { x: 14.85, z: 6.35, yaw: 38, pitch: -4 } : { x: CENTER.x, z: CENTER.z, yaw: 0, pitch: 0 };
+  : foyer ? { x: 14.9, z: 5.62, yaw: 34, pitch: -4 } : { x: CENTER.x, z: CENTER.z, yaw: 0, pitch: 0 };
 walk.setPose(START.x, START.z, START.yaw, START.pitch);
 
 // ── camera fov per aspect ──────────────────────────────────────────────────
@@ -206,6 +251,7 @@ const hud = createHUD({
   PLAN: P, lookup: house.lookup, touch: TOUCH,
   onToggleMode: () => setMode(mode === 'walk' ? 'overview' : 'walk'),
   onToggleTheme: () => applyTheme(currentTheme === 'day' ? 'evening' : 'day'),
+  onToggleAmbient: () => setAmbient(!ambientOn),
   onPickRoom: (r) => goRoom(r),
   onToggleLabels: () => { labelsOn = !labelsOn; hud.setLabels(labelsOn); if (labelsOn && mode === 'walk') setMode('overview'); updateLabels(); },
   onMinimapTap: (x, z) => {
@@ -412,6 +458,7 @@ function applyTheme(name) {
   exterior.userData.cityMat.emissiveIntensity = T.cityWindows;
   exterior.userData.groundMat.color.set(T.groundColor || STYLE.ground.color).multiplyScalar(T.ground);
   applyLampGlow();
+  ambientOn = !!(T.ambient && T.ambient.on); if (hud) hud.setAmbient(ambientOn); applyAmbient();
   updateBackdrop();
   adaptWarmup(1.0);
   renderer.shadowMap.needsUpdate = true;
@@ -445,7 +492,8 @@ function updateInteriorLights(dt) {
     const room = mode === 'walk' && currentRoom ? currentRoom.id : null;
     let want;
     if (mode === 'walk') {
-      want = [...house.spots].sort((a, b) => (Math.hypot(a.x - px, a.z - pz) + (a.room === room ? 0 : 2.5)) - (Math.hypot(b.x - px, b.z - pz) + (b.room === room ? 0 : 2.5))).slice(0, iLights.length);
+      const score = (a) => Math.hypot(a.x - px, a.z - pz) + (a.room === room ? 0 : 2.5) - (a.prio ? 1.5 : 0);
+      want = [...house.spots].sort((a, b) => score(a) - score(b)).slice(0, iLights.length);
     } else {
       // spread over the unit: greedy farthest-point from the biggest room
       want = [house.spots[0]];
@@ -538,6 +586,7 @@ function frame() {
   if (mode === 'overview' && !tween) orbit.update();
   updateDoors(dt);
   updateInteriorLights(dt);
+  updateAmbient(dt);
   // room tracking + minimap
   if (mode === 'walk') {
     const r = house.lookup.at(walk.state.x, walk.state.z);
@@ -553,6 +602,7 @@ function frame() {
 
 // ── boot ───────────────────────────────────────────────────────────────────
 applyTheme(currentTheme);
+ambientCur = ambientOn ? 1 : 0; applyAmbient();
 hud.setMode(mode);
 updateLabels();
 snapDoors();
@@ -580,6 +630,7 @@ window.__house = {
   mode(name) { if (name) setModeImmediate(name); return mode; },
   modeAnimated(name) { setMode(name); return mode; },
   theme(name) { if (name) applyTheme(name); return currentTheme; },
+  ambient(on, instant = false) { if (on !== undefined) setAmbient(on, instant); return ambientOn; },
   labels(on) { labelsOn = !!on; hud.setLabels(labelsOn); updateLabels(); return labelsOn; },
   quality(q) { return setQuality(q); },
   goRoom(id) { const r = P.rooms.find((q) => q.id === id); if (r) goRoom(r); return !!r; },
@@ -591,13 +642,15 @@ window.__house = {
       calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures,
       programs: i.programs ? i.programs.length : null, pixelRatio, dpr: renderer.getPixelRatio(), deviceDpr: window.devicePixelRatio, fps: this.fps(), mode, theme: currentTheme,
       room: currentRoom && currentRoom.id, pose: this.pose(), furniture: furnitureSource, mobile: MOBILE, touch: TOUCH,
+      ambient: ambientOn, ambientMeshes: ambientItems.length, pointLights: iLights.length + house.washers.length,
     };
   },
   render() { renderer.render(scene, camera); if (labelsOn && mode === 'overview') labelRenderer.render(scene, camera); },
   step(sec = 1) { const n = Math.round(sec * 60); for (let i = 0; i < n; i++) { if (mode === 'walk') walk.update(1 / 60); updateDoors(1 / 60); } return this.pose(); },   // deterministic sim for tests
   forceDoors(v = null) { doorOverride = v; snapDoors(); return v; },
   doors() { return house.doors.map((d) => ({ id: d.id, open: +d.open.toFixed(2) })); },
-  _: { THREE, scene, camera, renderer, house, walk, orbit, P },
+  _: { THREE, scene, camera, renderer, house, walk, orbit, P, furnGroup,
+    rescanAmbient() { ambientItems.length = 0; collectAmbient(furnGroup); applyAmbient(); return ambientItems.length; } },
 };
 function setModeImmediate(name) {
   tween = null;
