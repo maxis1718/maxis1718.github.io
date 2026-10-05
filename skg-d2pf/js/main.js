@@ -4,14 +4,17 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { PLAN as RAW_PLAN } from './plan.js';
-import { STYLE, THEMES } from './theme.js';
+import { STYLE, THEMES, kelvin } from './theme.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+import { createSpotRig } from './lighting.js';
 import { makeMaterials } from './materials.js';
 import { preparePlan, buildHouse, doorColliders } from './build.js';
-import { makeSky, makeCity, makeSun, fitSun, makeInteriorLights } from './env.js';
+import { makeSky, makeCity, makeSun, fitSun } from './env.js';
 import { createWalkControls, isFree, EYE, PLAYER_R } from './controls.js';
 import { createHUD } from './hud.js';
 import { pointInPoly, polyBBox } from './geom.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { createRealism, installPCSS } from './realism.js';
 
 const DEG = Math.PI / 180;
 const params = new URLSearchParams(location.search);
@@ -28,9 +31,11 @@ if (params.get('dpr')) pixelRatio = parseFloat(params.get('dpr'));
 renderer.setPixelRatio(pixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = THREE.AgXToneMapping;          // realism.js picks the final operator (STYLE.realism.toneMapping)
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// desktop: PCF + contact-hardening PCSS patch (realism.js); phones: PCF soft
+const PCSS = !MOBILE && !params.has('nopcss');
+renderer.shadowMap.type = PCSS ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
 renderer.shadowMap.autoUpdate = false;
 canvasWrap.appendChild(renderer.domElement);
 
@@ -58,13 +63,26 @@ const CENTER = new THREE.Vector3((B.x0 + B.x1) / 2, 0, (B.z0 + B.z1) / 2);
 const sky = makeSky(); scene.add(sky); sky.position.copy(CENTER);
 const exterior = makeCity(STYLE, CENTER); scene.add(exterior);
 const sun = makeSun(B, MOBILE); scene.add(sun, sun.target);
+if (PCSS) { fitSun(sun, THEMES.day.sun.dir); installPCSS({ shadowCamera: sun.shadow.camera, mapSize: sun.shadow.mapSize.x, ...((STYLE.realism && STYLE.realism.pcss) || {}) }); }
 const hemi = new THREE.HemisphereLight('#fff', '#fff', 0.5); scene.add(hemi);
-const iLights = makeInteriorLights(Math.max(3, 6 - house.washers.length)); for (const l of iLights) scene.add(l);   // ≤ 6 point lights incl. washers
 for (const w of house.washers) scene.add(w.light);
+// evening: real SpotLights re-assigned to the downlights nearest the camera (fake pools/scallops for the rest)
+const spotRig = createSpotRig(scene, STYLE, MOBILE);
+// skylights: LED sky panels light the hall with cool daylight (RectAreaLight, both themes)
+const skyLights = [];
+if (house.skylights.length && (!MOBILE || STYLE.skylight.mobileLights)) {
+  RectAreaLightUniformsLib.init();
+  for (const sk of house.skylights) {
+    const l = new THREE.RectAreaLight(kelvin(STYLE.skylight.cct), STYLE.skylight.intensity, sk.w - 0.06, sk.d - 0.06);
+    l.position.set(sk.x, sk.y - 0.004, sk.z); l.rotation.x = -Math.PI / 2; l.name = 'skylight_' + sk.id;
+    scene.add(l); skyLights.push(l);
+  }
+}
 scene.fog = new THREE.Fog('#cfdde8', 80, 700);
 
 // ── furniture (async; graceful fallback) ───────────────────────────────────
-const NO_COLLIDE = new Set(['rug', 'curtain', 'pendant', 'picture', 'tv', 'aircon_indoor', 'db_box', 'towel_rail']);
+const NO_COLLIDE = new Set(['rug', 'curtain', 'pendant', 'picture', 'tv', 'aircon_indoor', 'db_box', 'towel_rail', 'ziptrack']);
+const DYNAMIC = new Set(['ziptrack']);            // furniture with runtime animation → never batched / frozen
 const furnGroup = new THREE.Group(); furnGroup.name = 'furniture'; scene.add(furnGroup);
 const furnColliders = [];
 let furnitureSource = 'pending';
@@ -73,7 +91,23 @@ function normItem(it) {
   const opts = inner ? { ...it.opts, ...inner } : { ...(it.opts || {}) };
   return { ...it, opts };
 }
+// ziptrack fallback (used until furniture.js provides one): cassette + side channels + screen; setDrop(f) 0 = up … 1 = down
+function zipFallback(item) {
+  const g = new THREE.Group(), h = item.h || 2.75, w = item.w, dark = new THREE.MeshStandardMaterial({ color: '#3a3936', roughness: 0.6, metalness: 0.4 });
+  const cas = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, 0.12), dark); cas.position.y = h - 0.07;
+  const rails = [-1, 1].map((sx) => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.03, h - 0.13, 0.04), dark); m.position.set(sx * (w / 2 - 0.015), (h - 0.13) / 2, 0); return m; });
+  const fabric = new THREE.MeshStandardMaterial({ color: '#4a4844', roughness: 0.9, transparent: true, opacity: 0.82, side: THREE.DoubleSide });
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.06, 1), fabric);
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(w - 0.06, 0.04, 0.03), dark);
+  const H0 = h - 0.13;
+  g.userData.setDrop = (f) => { f = Math.max(0, Math.min(1, f)); const L = Math.max(0.002, H0 * f); scr.scale.y = L; scr.position.y = H0 - L / 2; bar.position.y = H0 - L; scr.visible = f > 0.003; };
+  for (const m of [cas, ...rails, scr, bar]) { m.castShadow = true; m.receiveShadow = true; g.add(m); }
+  g.userData.setDrop(item.opts && item.opts.drop || 0);
+  g.userData.collide = false;
+  return g;
+}
 function placeholder(item) {
+  if (item.type === 'ziptrack') return zipFallback(item);
   const h = item.h || 0.8;
   const mount = item.opts && item.opts.mount;
   const g = new THREE.Group();
@@ -97,6 +131,7 @@ async function loadFurniture() {
     if (mod && typeof mod.makeFurniture === 'function') {
       try { g = mod.makeFurniture(item, theme); } catch (e) { console.warn('[house] makeFurniture failed for', item.type, e && e.message); g = null; }
     }
+    if (g && DYNAMIC.has(item.type) && item.type === 'ziptrack' && typeof g.userData.setDrop !== 'function') g = null;
     if (!g) { g = placeholder(item); fb++; } else ok++;
     g.position.set(item.x, 0, item.z);
     g.rotation.y = (item.rot || 0) * DEG;
@@ -104,7 +139,8 @@ async function loadFurniture() {
     if (item.type === 'curtain') g.traverse((o) => { o.castShadow = false; });   // sheers must not black out the sun
     furnGroup.add(g);
     g.updateMatrixWorld(true);
-    g.traverse((o) => { o.matrixAutoUpdate = false; });
+    if (DYNAMIC.has(item.type)) { g.userData.dynamic = true; if (item.type === 'ziptrack') blindGroups.push(g); }
+    else g.traverse((o) => { o.matrixAutoUpdate = false; });
     const collide = g.userData.collide !== undefined ? !!g.userData.collide : !NO_COLLIDE.has(item.type);
     if (collide) {
       const a = (item.rot || 0) * DEG, c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
@@ -121,7 +157,13 @@ async function loadFurniture() {
   });
   applyLampGlow();
   applyAmbient();
-  if (!params.has('nobatch')) batchStatic(furnGroup);
+  if (!params.has('nobatch')) {
+    const dyn = furnGroup.children.filter((c) => c.userData.dynamic);
+    for (const c of dyn) furnGroup.remove(c);
+    batchStatic(furnGroup);
+    for (const c of dyn) furnGroup.add(c);
+  }
+  applyBlinds();
   furnitureSource = mod ? `module (${ok} ok, ${fb} placeholder)` : `placeholder (${fb})`;
   rebuildStatic();
   renderer.shadowMap.needsUpdate = true;
@@ -178,13 +220,19 @@ function collectAmbient(group) {
   });
 }
 const _off = new THREE.Color(STYLE.washer.slotOff), _on = new THREE.Color(), _tmp = new THREE.Color();
+const slotCol = new THREE.Color(kelvin(STYLE.sideSlot.cct)), slotOff = new THREE.Color(STYLE.sideSlot.stripOff);
+const grazeCol = slotCol.clone().lerp(new THREE.Color(1, 1, 1), STYLE.sideSlot.whiten ?? 0);
 function applyAmbient() {
   const A = (THEMES[currentTheme] || THEMES.day).ambient || { slot: 1, wallGlow: 0.5, light: 2, furniture: 1 };
   const f = ambientCur, k = f * f * (3 - 2 * f);   // smoothstep
   _on.set(STYLE.washer.color).multiplyScalar(A.slot);
   M.washerSlot.color.copy(_tmp.copy(_off).lerp(_on, k));
   M.washerGlow.opacity = A.wallGlow * k;
-  for (const w of house.washers) { w.glow.visible = k > 0.002; w.light.intensity = A.light * k; w.light.visible = k > 0.002; }
+  for (const w of house.washers) { w.glow.visible = k > 0.002; w.light.intensity = (A.light || 0) * k; w.light.visible = k > 0.002; }
+  // feature-wall side slots: diffuser strip + baked grazing light (multiplicative)
+  _on.copy(slotCol).multiplyScalar(A.slot);
+  M.slotStrip.color.copy(_tmp.copy(slotOff).lerp(_on, k));
+  for (const sl of house.sideSlots) { sl.mat.color.copy(grazeCol).multiplyScalar(STYLE.sideSlot.strength * A.wallGlow * k); sl.graze.visible = k > 0.002; }
   for (const it of ambientItems) {
     if (it.basic) { if (it.transp) it.mat.opacity = it.op * k * A.furniture; else if (it.col) it.mat.color.copy(_tmp.copy(it.col).multiplyScalar(Math.max(0.12, k * A.furniture))); }
     else { it.mat.emissiveIntensity = it.ei * k * A.furniture; if (it.transp) it.mat.opacity = it.op * Math.max(k, 0); }
@@ -200,6 +248,24 @@ function updateAmbient(dt) {
   if (ambientCur === t) return;
   ambientCur = t > ambientCur ? Math.min(1, ambientCur + dt / 0.4) : Math.max(0, ambientCur - dt / 0.4);
   applyAmbient();
+}
+
+// ── 捲簾 ziptrack blinds: groups expose userData.setDrop(f); 1.5 s eased animation, default up ──
+const blindGroups = [];
+let blindsOn = false, blindsCur = 0, blindsLast = -1;
+function applyBlinds() {
+  const f = ease(blindsCur);
+  if (Math.abs(f - blindsLast) < 1e-4) return;
+  blindsLast = f;
+  for (const g of blindGroups) { try { g.userData.setDrop(f); } catch (e) { /* furniture bug — ignore */ } g.updateMatrixWorld(true); }
+}
+function setBlinds(on) { blindsOn = !!on; hud.setBlinds(blindsOn); sceneIdle = 0; }
+function updateBlinds(dt) {
+  const t = blindsOn ? 1 : 0;
+  if (blindsCur === t) return;
+  blindsCur = t > blindsCur ? Math.min(1, blindsCur + dt / 1.5) : Math.max(0, blindsCur - dt / 1.5);
+  applyBlinds(); sceneIdle = 0;
+  if (blindsCur === t) renderer.shadowMap.needsUpdate = true;
 }
 
 // ── colliders ──────────────────────────────────────────────────────────────
@@ -233,11 +299,11 @@ let labelsOn = false;
 let currentRoom = null;
 let tween = null;
 
-// start: foyer just inside the main door, looking north toward the living room
-const foyer = P.rooms.find((r) => r.id === 'foyer');
-// start: north end of the entrance hall, looking north-west across kitchen/dining to the living room + balcony
+// start: south-west corner of the living/dining room (kitchen side), looking north-east across the dining table and
+// sofa to the wabi-sabi TV wall, with the balcony on the left
+const living = P.rooms.find((r) => r.id === 'living');
 const START = params.has('start') ? (([x, z, y]) => ({ x, z, yaw: y, pitch: -4 }))(params.get('start').split(',').map(Number))
-  : foyer ? { x: 14.9, z: 5.62, yaw: 34, pitch: -4 } : { x: CENTER.x, z: CENTER.z, yaw: 0, pitch: 0 };
+  : living ? { x: 10.35, z: 4.78, yaw: -58, pitch: -5 } : { x: CENTER.x, z: CENTER.z, yaw: 0, pitch: 0 };
 walk.setPose(START.x, START.z, START.yaw, START.pitch);
 
 // ── camera fov per aspect ──────────────────────────────────────────────────
@@ -252,6 +318,8 @@ const hud = createHUD({
   onToggleMode: () => setMode(mode === 'walk' ? 'overview' : 'walk'),
   onToggleTheme: () => applyTheme(currentTheme === 'day' ? 'evening' : 'day'),
   onToggleAmbient: () => setAmbient(!ambientOn),
+  onToggleBlinds: () => setBlinds(!blindsOn),
+  onTogglePhoto: () => realism.togglePhoto(),
   onPickRoom: (r) => goRoom(r),
   onToggleLabels: () => { labelsOn = !labelsOn; hud.setLabels(labelsOn); if (labelsOn && mode === 'walk') setMode('overview'); updateLabels(); },
   onMinimapTap: (x, z) => {
@@ -260,6 +328,10 @@ const hud = createHUD({
     if (spot) teleport(spot[0], spot[1], walk.state.yaw / DEG);
   },
 });
+
+// ── realism layer (textures, portals, probes, glass, post FX, photo mode) ─────────────────────────────────
+const realism = createRealism({ renderer, scene, camera, house, M, STYLE, THEMES, P, sun, hemi, sky, mobile: MOBILE, params, hud, furnGroup, spotRig,
+  envTexture: scene.environment, onReapplyTheme: () => applyTheme(currentTheme, true) });
 
 // room labels (overview)
 const labelObjs = [];
@@ -407,6 +479,7 @@ function springTo(d, target, dt, w = 6.5) {
 }
 function applyDoor(d) {
   if (d.type === 'swing') d.pivot.rotation.y = d.closedRot + (d.openRot - d.closedRot) * d.open;
+  else if (d.type === 'bifold') { const phi = d.open * d.maxFold; d.A.rotation.y = d.base + d.s * phi; d.B.rotation.y = -2 * d.s * phi; }
   else for (const p of d.panels) {
     const u = p.closedU + (p.openU - p.closedU) * d.open;
     if (d.alongX) p.g.position.x = u; else p.g.position.z = u;
@@ -418,11 +491,11 @@ function updateDoors(dt) {
   for (const d of house.doors) {
     if (!d) continue;
     const dist = Math.hypot(px - d.center[0], pz - d.center[1]);
-    const near = d.type === 'swing' ? dist < (d.id === 'main' ? 0.95 : 1.4) : distToSeg(px, pz, d) < 1.5;
+    const near = d.type === 'swing' || d.type === 'bifold' ? dist < (d.id === 'main' ? 0.95 : 1.4) : distToSeg(px, pz, d) < 1.5;
     d.target = doorOverride !== null ? doorOverride : (mode === 'overview') ? 1 : near ? 1 : 0;
     const before = d.open;
-    springTo(d, d.target, Math.min(dt, 0.05), d.type === 'swing' ? 6.0 : 5.0);
-    if (before !== d.open) applyDoor(d);
+    springTo(d, d.target, Math.min(dt, 0.05), d.type === 'slide' ? 5.0 : 6.0);
+    if (before !== d.open) { applyDoor(d); sceneIdle = 0; }
   }
 }
 function distToSeg(px, pz, d) {
@@ -434,13 +507,13 @@ function snapDoors() {
   const px = walk.state.x, pz = walk.state.z;
   for (const d of house.doors) {
     if (!d) continue;
-    const near = d.type === 'swing' ? Math.hypot(px - d.center[0], pz - d.center[1]) < (d.id === 'main' ? 0.95 : 1.4) : distToSeg(px, pz, d) < 1.5;
+    const near = d.type === 'swing' || d.type === 'bifold' ? Math.hypot(px - d.center[0], pz - d.center[1]) < (d.id === 'main' ? 0.95 : 1.4) : distToSeg(px, pz, d) < 1.5;
     d.open = doorOverride !== null ? doorOverride : near ? 1 : 0; d.vel = 0; applyDoor(d);
   }
 }
 
 // ── themes ─────────────────────────────────────────────────────────────────
-function applyTheme(name) {
+function applyTheme(name, keepAmbient = false) {
   const T = THEMES[name] || THEMES.day;
   currentTheme = T.name || name;
   renderer.toneMappingExposure = T.exposure;
@@ -451,21 +524,20 @@ function applyTheme(name) {
   sun.color.set(T.sun.color); sun.intensity = T.sun.intensity; fitSun(sun, T.sun.dir);
   hemi.color.set(T.hemi.sky); hemi.groundColor.set(T.hemi.ground); hemi.intensity = T.hemi.intensity;
   scene.environmentIntensity = T.envIntensity;
-  M.downlight.color.set(T.downlight.color).multiplyScalar(T.downlight.intensity);
-  M.glow.color.set(T.downlight.color); M.glow.opacity = T.downlight.glow; M.glow.visible = T.downlight.glow > 0.001;
-  for (const l of iLights) { l.color.set(T.interior.color); l.distance = T.interior.distance; }
-  interiorTarget = T.interior.intensity;
+  const DL = T.downlights || { on: false, aperture: 0.15 };
+  downlightsOn = !!DL.on; M.aperture.color.setScalar(DL.aperture);
   exterior.userData.cityMat.emissiveIntensity = T.cityWindows;
   exterior.userData.groundMat.color.set(T.groundColor || STYLE.ground.color).multiplyScalar(T.ground);
-  applyLampGlow();
-  ambientOn = !!(T.ambient && T.ambient.on); if (hud) hud.setAmbient(ambientOn); applyAmbient();
+  applyLampGlow(); sceneIdle = 0;
+  if (!keepAmbient) { ambientOn = !!(T.ambient && T.ambient.on); if (hud) hud.setAmbient(ambientOn); applyAmbient(); }
+  realism.onTheme(T, currentTheme);
   updateBackdrop();
   adaptWarmup(1.0);
   renderer.shadowMap.needsUpdate = true;
   document.body.classList.toggle('theme-evening', currentTheme === 'evening');
   hud.setTheme(currentTheme);
 }
-let interiorTarget = 0;
+let downlightsOn = false;
 // overview backdrop: optional screen-space gradient (evening dusk) instead of ground + city
 const bgCache = {};
 function gradientTexture(stops) {
@@ -483,49 +555,18 @@ function updateBackdrop() {
   scene.background = useBg ? gradientTexture(T.overviewBg) : null;
   sky.visible = !useBg; exterior.visible = !useBg;
 }
-let spotTimer = 0;
-function updateInteriorLights(dt) {
-  spotTimer -= dt;
-  if (spotTimer <= 0 && interiorTarget > 0) {
-    spotTimer = 0.25;
-    const px = mode === 'walk' ? walk.state.x : orbit.target.x, pz = mode === 'walk' ? walk.state.z : orbit.target.z;
-    const room = mode === 'walk' && currentRoom ? currentRoom.id : null;
-    let want;
-    if (mode === 'walk') {
-      const score = (a) => Math.hypot(a.x - px, a.z - pz) + (a.room === room ? 0 : 2.5) - (a.prio ? 1.5 : 0);
-      want = [...house.spots].sort((a, b) => score(a) - score(b)).slice(0, iLights.length);
-    } else {
-      // spread over the unit: greedy farthest-point from the biggest room
-      want = [house.spots[0]];
-      while (want.length < iLights.length) {
-        let best = null, bd = -1;
-        for (const s of house.spots) { if (want.includes(s)) continue; const d = Math.min(...want.map((w) => Math.hypot(w.x - s.x, w.z - s.z))); if (d > bd) { bd = d; best = s; } }
-        if (!best) break; want.push(best);
-      }
-    }
-    const free = [];
-    for (const l of iLights) { if (l.userData.spot && want.includes(l.userData.spot)) want = want.filter((s) => s !== l.userData.spot); else free.push(l); }
-    for (const l of free) l.userData.want = want.shift() || null;
-  }
-  for (const l of iLights) {
-    const ud = l.userData;
-    if (ud.want !== undefined && ud.want !== ud.spot) {
-      ud.goal = 0;
-      if (ud.cur < 0.03) { ud.spot = ud.want; if (ud.spot) l.position.set(ud.spot.x, ud.spot.y, ud.spot.z); }
-    } else ud.goal = ud.spot ? interiorTarget : 0;
-    if (interiorTarget === 0) ud.goal = 0;
-    ud.cur += (ud.goal - ud.cur) * (1 - Math.exp(-dt * 6));
-    if (Math.abs(ud.cur - ud.goal) < 0.01) ud.cur = ud.goal;
-    l.intensity = ud.cur;
-    l.visible = interiorTarget > 0 || ud.cur > 0.01;   // hidden in daytime → cheaper shaders
-  }
+function updateLights(dt) {
+  if (spotRig.update(dt, house.downlights, {
+    on: downlightsOn, camera, mode: mode === 'walk' && !tween ? 'walk' : 'overview',
+    roomId: currentRoom && currentRoom.id, focus: orbit.target,
+  })) sceneIdle = 0;
 }
 
 // ── resize / adaptive resolution ───────────────────────────────────────────
 function onResize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h); labelRenderer.setSize(w, h);
-  if (composer) composer.setSize(w, h);
+  realism.resize(w, h);
   camera.aspect = w / h;
   if (!tween) camera.fov = targetFov();
   camera.updateProjectionMatrix();
@@ -555,24 +596,9 @@ function adapt(dt) {
   }
 }
 
-// ── optional desktop 'High' quality (GTAO) ─────────────────────────────────
-let composer = null, hq = false;
-async function setQuality(q) {
-  hq = q === 'high' && !MOBILE;
-  if (hq && !composer) {
-    const [{ EffectComposer }, { RenderPass }, { GTAOPass }, { OutputPass }] = await Promise.all([
-      import('three/addons/postprocessing/EffectComposer.js'), import('three/addons/postprocessing/RenderPass.js'),
-      import('three/addons/postprocessing/GTAOPass.js'), import('three/addons/postprocessing/OutputPass.js')]);
-    composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    const ao = new GTAOPass(scene, camera, window.innerWidth, window.innerHeight);
-    ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 1, scale: 1.1 });
-    composer.addPass(ao);
-    composer.addPass(new OutputPass());
-  }
-  if (composer) composer.setSize(window.innerWidth, window.innerHeight);
-}
-window.addEventListener('keydown', (e) => { if (e.code === 'KeyH' && !MOBILE) setQuality(hq ? 'normal' : 'high'); });
+// ── desktop post quality (js/fx.js via realism): H toggles high ↔ auto ────────────────────────────────────
+function setQuality(q) { const fx = realism.fx; if (fx) fx.setQuality(q === 'high' ? 'high' : q === 'off' ? 'off' : 'auto'); return fx ? fx.quality : 'off'; }
+window.addEventListener('keydown', (e) => { if (e.code === 'KeyH' && !MOBILE && realism.fx) setQuality(realism.fx.quality === 'high' ? 'auto' : 'high'); });
 
 // ── main loop ──────────────────────────────────────────────────────────────
 const clock = new THREE.Clock();
@@ -585,8 +611,9 @@ function frame() {
   stepTween(dt);
   if (mode === 'overview' && !tween) orbit.update();
   updateDoors(dt);
-  updateInteriorLights(dt);
+  updateLights(dt);
   updateAmbient(dt);
+  updateBlinds(dt);
   // room tracking + minimap
   if (mode === 'walk') {
     const r = house.lookup.at(walk.state.x, walk.state.z);
@@ -595,10 +622,26 @@ function frame() {
   const mx = mode === 'walk' || tween ? walk.state.x : orbit.target.x, mz = mode === 'walk' || tween ? walk.state.z : orbit.target.z;
   const myaw = mode === 'walk' ? walk.state.yaw : Math.atan2(-(orbit.target.x - camera.position.x), -(orbit.target.z - camera.position.z));
   hud.drawMinimap(mx, mz, myaw, currentRoom && mode === 'walk' ? currentRoom.id : null);
-  if (hq && composer) composer.render(); else renderer.render(scene, camera);
+  // camera / scene idle tracking (for progressive renderers such as a photo mode)
+  camera.updateMatrixWorld();
+  const e = camera.matrixWorld.elements;
+  let moved = Math.abs(camera.fov - lastFov) > 1e-4;
+  for (let i = 0; i < 16 && !moved; i++) if (Math.abs(e[i] - lastCam[i]) > 1e-5) moved = true;
+  if (moved) { for (let i = 0; i < 16; i++) lastCam[i] = e[i]; lastFov = camera.fov; camIdle = 0; } else camIdle += rawDt;
+  if (tween || ambientCur !== (ambientOn ? 1 : 0)) sceneIdle = 0; else sceneIdle += rawDt;
+  const ctx = { dt, rawDt, scene, camera, renderer, mode: tween ? 'tween' : mode, cameraIdle: camIdle, sceneIdle, moved, theme: currentTheme,
+    room: mode === 'walk' ? currentRoom : null, ambient: ambientOn, blinds: blindsOn };
+  if (realism.update(dt, ctx)) { sceneIdle = 0; ctx.sceneIdle = 0; }
+  for (const fn of HOOKS.beforeRender) fn(ctx);
+  if (HOOKS.render) HOOKS.render(ctx);
+  else realism.render(ctx);
   if (labelsOn && mode === 'overview') labelRenderer.render(scene, camera);
-  adapt(Math.min(rawDt, 2));
+  for (const fn of HOOKS.afterRender) fn(ctx);
+  if (realism.photo && realism.photo.tracing) adaptWarmup(0.5);     // path-traced frames are budgeted, not a fill-rate signal
+  else adapt(Math.min(rawDt, 2));
 }
+const HOOKS = { beforeRender: [], afterRender: [], render: null };   // render: optional replacement for the default render
+const lastCam = new Float32Array(16); let lastFov = 0, camIdle = 0, sceneIdle = 0;
 
 // ── boot ───────────────────────────────────────────────────────────────────
 applyTheme(currentTheme);
@@ -610,6 +653,9 @@ if (params.get('mode') === 'overview') setMode('overview');
 setLoad('擺放家具 Furnishing…');
 const furnDone = loadFurniture().catch((e) => console.error('[house] furniture load failed', e));
 await Promise.race([furnDone, new Promise((r) => setTimeout(r, 6000))]);
+setLoad('材質與光影 Materials…');
+const realismDone = furnDone.then(() => realism.start()).catch((e) => console.error('[house] realism failed', e));
+await Promise.race([realismDone, new Promise((r) => setTimeout(r, 8000))]);
 renderer.shadowMap.needsUpdate = true;
 renderer.setAnimationLoop(frame);
 requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -631,6 +677,8 @@ window.__house = {
   modeAnimated(name) { setMode(name); return mode; },
   theme(name) { if (name) applyTheme(name); return currentTheme; },
   ambient(on, instant = false) { if (on !== undefined) setAmbient(on, instant); return ambientOn; },
+  blinds(on, instant = false) { if (on !== undefined) { setBlinds(on); if (instant) { blindsCur = blindsOn ? 1 : 0; applyBlinds(); renderer.shadowMap.needsUpdate = true; } } return blindsOn; },
+  idle() { return { camera: camIdle, scene: sceneIdle }; },
   labels(on) { labelsOn = !!on; hud.setLabels(labelsOn); updateLabels(); return labelsOn; },
   quality(q) { return setQuality(q); },
   goRoom(id) { const r = P.rooms.find((q) => q.id === id); if (r) goRoom(r); return !!r; },
@@ -642,14 +690,19 @@ window.__house = {
       calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures,
       programs: i.programs ? i.programs.length : null, pixelRatio, dpr: renderer.getPixelRatio(), deviceDpr: window.devicePixelRatio, fps: this.fps(), mode, theme: currentTheme,
       room: currentRoom && currentRoom.id, pose: this.pose(), furniture: furnitureSource, mobile: MOBILE, touch: TOUCH,
-      ambient: ambientOn, ambientMeshes: ambientItems.length, pointLights: iLights.length + house.washers.length,
+      ambient: ambientOn, ambientMeshes: ambientItems.length, blinds: blindsOn, blindGroups: blindGroups.length,
+      lights: { spots: spotRig.spots.length, rectArea: skyLights.length, fixtures: house.downlights.fixtures.length, downlightsOn },
+      cameraIdle: +camIdle.toFixed(2), sceneIdle: +sceneIdle.toFixed(2), fx: realism.fx ? realism.fx.quality : 'off', realism: realism.info(),
     };
   },
-  render() { renderer.render(scene, camera); if (labelsOn && mode === 'overview') labelRenderer.render(scene, camera); },
+  render() { realism.rasterRender(); if (labelsOn && mode === 'overview') labelRenderer.render(scene, camera); },
+  realism,
+  photo(on) { if (on !== undefined) realism.setPhotoArmed(on); return realism.photoArmed; },
   step(sec = 1) { const n = Math.round(sec * 60); for (let i = 0; i < n; i++) { if (mode === 'walk') walk.update(1 / 60); updateDoors(1 / 60); } return this.pose(); },   // deterministic sim for tests
   forceDoors(v = null) { doorOverride = v; snapDoors(); return v; },
   doors() { return house.doors.map((d) => ({ id: d.id, open: +d.open.toFixed(2) })); },
-  _: { THREE, scene, camera, renderer, house, walk, orbit, P, furnGroup,
+  _: { THREE, scene, camera, renderer, house, walk, orbit, P, furnGroup, M, START: [START.x, START.z, START.yaw, START.pitch], STYLE, THEMES, hooks: HOOKS, controls: { walk, orbit }, spotRig, skyLights,
+    get mode() { return mode; }, get cameraIdle() { return camIdle; }, get sceneIdle() { return sceneIdle; },
     rescanAmbient() { ambientItems.length = 0; collectAmbient(furnGroup); applyAmbient(); return ambientItems.length; } },
 };
 function setModeImmediate(name) {

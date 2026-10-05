@@ -6,10 +6,12 @@ const ICON = {
   moon: '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>',
   rooms: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="1.5"/><path d="M3.5 12h9M12.5 3.5v13M16 12h4.5"/></svg>',
   ambient: '<svg viewBox="0 0 24 24"><path d="M5 4.5h14"/><path d="M6.5 4.5c0 0 .2 9 5.5 9s5.5-9 5.5-9"/><path d="M12 16.5v3M7.2 15.2l-1.8 2.2M16.8 15.2l1.8 2.2"/></svg>',
+  blinds: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="3" rx="1"/><path d="M5 6.5v11M19 6.5v11M5.5 9.5h13M5.5 12.5h13M5.5 15.5h13"/><path d="M12 17.5v3"/></svg>',
+  camera: '<svg viewBox="0 0 24 24"><path d="M4 7.5h3.2l1.6-2.3h6.4l1.6 2.3H20a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13.2" r="3.6"/></svg>',
   ruler: '<svg viewBox="0 0 24 24"><path d="m3 16.5 13.5-13.5 4.5 4.5L7.5 21 3 16.5Z"/><path d="m7 12.5 2 2M10 9.5l1.5 1.5M13 6.5l2 2"/></svg>',
 };
 
-export function createHUD({ PLAN, lookup, onToggleMode, onToggleTheme, onToggleAmbient, onPickRoom, onToggleLabels, onMinimapTap, touch }) {
+export function createHUD({ PLAN, lookup, onToggleMode, onToggleTheme, onToggleAmbient, onToggleBlinds, onTogglePhoto, onPickRoom, onToggleLabels, onMinimapTap, touch }) {
   const hud = document.getElementById('hud');
   hud.innerHTML = `
     <div class="card room-card" id="roomCard"><div class="zh" id="roomZh">—</div><div class="en"><span id="roomEn"></span><span class="dims" id="roomDims"></span></div></div>
@@ -17,25 +19,31 @@ export function createHUD({ PLAN, lookup, onToggleMode, onToggleTheme, onToggleA
       <button id="bMode" class="tb" aria-label="mode">${ICON.overview}<span>俯瞰</span></button>
       <button id="bTheme" class="tb" aria-label="theme">${ICON.moon}<span>夜</span></button>
       <button id="bAmbient" class="tb" aria-label="ambient lighting">${ICON.ambient}<span>氛圍燈</span></button>
+      <button id="bBlinds" class="tb" aria-label="blinds">${ICON.blinds}<span>捲簾</span></button>
       <button id="bRooms" class="tb" aria-label="rooms">${ICON.rooms}<span>房間</span></button>
       <button id="bLabels" class="tb" aria-label="labels">${ICON.ruler}<span>標尺</span></button>
+      <button id="bPhoto" class="tb" aria-label="photo mode" hidden>${ICON.camera}<span>相片</span></button>
     </div>
+    <div class="photo-ring" id="photoRing" hidden><svg viewBox="0 0 36 36"><circle class="pr-bg" cx="18" cy="18" r="15"/><circle class="pr-fg" id="prFg" cx="18" cy="18" r="15"/></svg><span id="prTxt">相片</span></div>
     <div class="card minimap" id="minimapWrap"><canvas id="minimap"></canvas></div>
     <div class="menu card" id="menu" hidden><div class="menu-h">房間 <small>Rooms</small></div><div class="menu-list" id="menuList"></div></div>
     <div class="hint" id="hint" hidden></div>`;
   const $ = (id) => document.getElementById(id);
   const roomZh = $('roomZh'), roomEn = $('roomEn'), roomDims = $('roomDims');
-  const bMode = $('bMode'), bTheme = $('bTheme'), bRooms = $('bRooms'), bLabels = $('bLabels'), bAmbient = $('bAmbient');
+  const bMode = $('bMode'), bTheme = $('bTheme'), bRooms = $('bRooms'), bLabels = $('bLabels'), bAmbient = $('bAmbient'), bBlinds = $('bBlinds'), bPhoto = $('bPhoto');
+  const ring = $('photoRing'), ringFg = $('prFg'), ringTxt = $('prTxt');
   const menu = $('menu'), menuList = $('menuList');
 
   const stop = (e) => { e.stopPropagation(); };
-  for (const el of [bMode, bTheme, bAmbient, bRooms, bLabels, menu, $('minimapWrap')]) {
+  for (const el of [bMode, bTheme, bAmbient, bBlinds, bRooms, bLabels, bPhoto, menu, $('minimapWrap')]) {
     el.addEventListener('pointerdown', stop); el.addEventListener('touchstart', stop, { passive: true });
   }
   bMode.addEventListener('click', () => onToggleMode());
   bTheme.addEventListener('click', () => onToggleTheme());
   bAmbient.addEventListener('click', () => onToggleAmbient && onToggleAmbient());
   bLabels.addEventListener('click', () => onToggleLabels());
+  bBlinds.addEventListener('click', () => onToggleBlinds && onToggleBlinds());
+  bPhoto.addEventListener('click', () => onTogglePhoto && onTogglePhoto());
   bRooms.addEventListener('click', () => { menu.hidden = !menu.hidden; bRooms.classList.toggle('on', !menu.hidden); });
 
   // room menu (skip duplicates like the two A/C ledges)
@@ -56,7 +64,7 @@ export function createHUD({ PLAN, lookup, onToggleMode, onToggleTheme, onToggleA
   const mm = $('minimap'), wrap = $('minimapWrap');
   const B = PLAN.bounds, pad = 6;
   let scale = 1, cw = 0, ch = 0, dpr = 1, base = null;
-  const FILL = { wood: '#c8ab86', tile: '#d9d6cf', bath: '#a9b6bc', balcony: '#b4ae9f', ledge: '#8e8b85', service: '#b4ae9f', lobby: '#bdb7ac' };
+  const FILL = { wood: '#c8ab86', tile: '#d9d6cf', bath: '#a9b6bc', balcony: '#b4ae9f', decking: '#9a7b5f', ledge: '#8e8b85', service: '#b4ae9f', lobby: '#bdb7ac' };
   function layoutMinimap() {
     const small = Math.min(window.innerWidth, window.innerHeight) < 600;
     const W = small ? 128 : 210;
@@ -80,7 +88,11 @@ export function createHUD({ PLAN, lookup, onToggleMode, onToggleTheme, onToggleA
       g.fillRect(a, b, Math.max(0.8, c - a), Math.max(0.8, d - b));
     }
     g.fillStyle = '#9a8670';      // feature walls (wabi-sabi TV wall)
-    for (const f of PLAN.features || []) { const [a, b] = toMap(f.x0, f.z0), [c, d] = toMap(f.x1, f.z1); g.fillRect(a - 0.6, b, Math.max(1.6, c - a + 1.2), Math.max(1.6, d - b)); }
+    for (const f of PLAN.features || []) {
+      const [a, b] = toMap(f.x0, f.z0), [c, d] = toMap(f.x1, f.z1);
+      if (f.type === 'skylight') { g.fillStyle = 'rgba(90,165,235,0.75)'; g.fillRect(a, b, c - a, d - b); g.fillStyle = '#9a8670'; continue; }
+      g.fillRect(a - 0.6, b, Math.max(1.6, c - a + 1.2), Math.max(1.6, d - b));
+    }
     g.fillStyle = '#7fb4cf';
     for (const w of PLAN.windows) { const [a, b] = toMap(w.x0, w.z0), [c, d] = toMap(w.x1, w.z1); g.fillRect(a - 0.5, b - 0.5, c - a + 1, d - b + 1); }
     // doors: swing leaves as thin arcs-less lines, sliders as bars
@@ -141,6 +153,23 @@ export function createHUD({ PLAN, lookup, onToggleMode, onToggleTheme, onToggleA
   function setTheme(name) { bTheme.innerHTML = name === 'day' ? `${ICON.moon}<span>夜</span>` : `${ICON.sun}<span>日</span>`; }
   function setLabels(on) { bLabels.classList.toggle('on', on); }
   function setAmbient(on) { bAmbient.classList.toggle('on', !!on); }
+  function setBlinds(on) { bBlinds.classList.toggle('on', !!on); }
+  // photo mode: button state + progress ring ("samples n")
+  const RC = 2 * Math.PI * 15;
+  function setPhoto(p = {}) {
+    if (p.unsupported) { bPhoto.hidden = true; ring.hidden = true; return; }
+    bPhoto.hidden = false;
+    bPhoto.classList.toggle('on', !!p.armed);
+    bPhoto.classList.toggle('busy', !!p.loading);
+    const show = !!(p.armed && p.tracing);
+    ring.hidden = !show;
+    if (show) {
+      const k = p.max ? Math.min(1, p.samples / p.max) : 0;
+      ringFg.style.strokeDasharray = `${(k * RC).toFixed(1)} ${RC.toFixed(1)}`;
+      ringTxt.textContent = `相片 · ${p.samples}`;
+      ring.classList.toggle('done', k >= 1);
+    }
+  }
 
   // ── one-time controls hint ───────────────────────────────────────────────
   const hint = $('hint');
@@ -164,5 +193,5 @@ export function createHUD({ PLAN, lookup, onToggleMode, onToggleTheme, onToggleA
     window.addEventListener('pointerdown', close, true); window.addEventListener('keydown', close, true);
   }
 
-  return { setRoom, setMode, setTheme, setLabels, setAmbient, drawMinimap, showHint, closeMenu: () => { menu.hidden = true; } };
+  return { setRoom, setMode, setTheme, setLabels, setAmbient, setBlinds, setPhoto, drawMinimap, showHint, closeMenu: () => { menu.hidden = true; } };
 }

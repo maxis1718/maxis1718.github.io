@@ -2,6 +2,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GeoAcc, pointInPoly, distToPoly, polyBBox, polyArea, polyCentroid } from './geom.js';
+import { makeGrazeTexture, rawOutput } from './materials.js';
+import { buildDownlights } from './lighting.js';
+
+const OUTDOOR = ['balcony', 'decking', 'ledge', 'service'];
 
 const EPS = 1e-4;
 
@@ -35,7 +39,7 @@ export function makeRoomLookup(P) {
 function faceClass(room) {
   if (!room) return 'facade';
   if (room.floor === 'bath') return 'bath';
-  if (room.floor === 'balcony' || room.floor === 'ledge' || room.floor === 'service') return 'facade';
+  if (OUTDOOR.includes(room.floor)) return 'facade';
   return 'wall';
 }
 
@@ -82,7 +86,7 @@ export function buildHouse(P, M, STYLE) {
 
   // ---------- walls (faces classified per room side) -----------------------
   const acc = { wall: new GeoAcc(), bath: new GeoAcc(), facade: new GeoAcc(), cap: new GeoAcc(), sill: new GeoAcc(),
-    skirt: new GeoAcc(), slab: new GeoAcc(), thresh: new GeoAcc(), black: new GeoAcc(), clear: new GeoAcc() };
+    skirt: new GeoAcc(), slab: new GeoAcc(), thresh: new GeoAcc(), black: new GeoAcc(), clear: new GeoAcc(), alw: new GeoAcc() };
   const ao = new GeoAcc(true);
   const aoW = STYLE.ao.width;
   const windowAt = (w) => P.windows.find((win) => win.x0 >= w.x0 - 0.05 && win.x1 <= w.x1 + 0.05 && win.z0 >= w.z0 - 0.05 && win.z1 <= w.z1 + 0.05);
@@ -99,7 +103,8 @@ export function buildHouse(P, M, STYLE) {
   }
   const pt = (f, u, off) => (f.axis === 'x' ? [f.at + f.sign * off, u] : [u, f.at + f.sign * off]);
   // u-intervals of face f in [u0,u1] NOT covered by a PLAN feature (feature walls get no skirting / AO strips)
-  const FEATS = P.features || [];
+  const FEATS = (P.features || []).filter((f) => !f.type || f.type === 'wall' || f.finish);     // feature walls
+  const SKY = (P.features || []).filter((f) => f.type === 'skylight');
   function minusFeatures(f, u0, u1) {
     let out = [[u0, u1]];
     for (const ft of FEATS) {
@@ -269,87 +274,39 @@ export function buildHouse(P, M, STYLE) {
   }
 
   // ---------- feature walls (PLAN.features) --------------------------------
-  const features = [], washers = [];
+  const features = [], washers = [], sideSlots = [];
   for (const ft of FEATS) {
     const out = buildFeature(ft, P, M, STYLE, L, ceilingGroup, root);
     if (!out) continue;
     features.push(out); colliders.push(out.collider);
     if (out.washer) washers.push(out.washer);
+    if (out.slots) sideSlots.push(out.slots);
   }
 
-  // ---------- ceilings, downlights, light spots -----------------------------
-  const ceilGeos = [], dl = new GeoAcc(), trim = new GeoAcc(), glow = new GeoAcc();
-  const spots = [];
-  const R = STYLE.downlight.radius, seg = 16;
-  const disc = (acc2, x, y, z, r0, r1) => {
-    for (let i = 0; i < seg; i++) {
-      const a = (i / seg) * Math.PI * 2, b = ((i + 1) / seg) * Math.PI * 2;
-      const p = (rr, t) => [x + Math.cos(t) * rr, y, z + Math.sin(t) * rr];
-      // facing down: winding A, B, C with normal -Y
-      if (r0 === 0) acc2.p.push(...[x, y, z], ...p(r1, a), ...p(r1, b));
-      else acc2.p.push(...p(r0, a), ...p(r1, a), ...p(r1, b), ...p(r0, a), ...p(r1, b), ...p(r0, b));
-      const nv = r0 === 0 ? 3 : 6;
-      for (let k = 0; k < nv; k++) { acc2.n.push(0, -1, 0); acc2.uv.push(0, 0); }
-    }
-  };
+  // ---------- ceilings (with skylight holes) + skylights ---------------------
+  const ceilGeos = [];
   for (const r of P.rooms) {
     if (r.ceiling === false) continue;
     const shape = new THREE.Shape(r.poly.map(([x, z]) => new THREE.Vector2(x, z)));
+    for (const sk of SKY) {
+      if (!pointInPoly((sk.x0 + sk.x1) / 2, (sk.z0 + sk.z1) / 2, r.poly)) continue;
+      shape.holes.push(new THREE.Path([new THREE.Vector2(sk.x0, sk.z0), new THREE.Vector2(sk.x1, sk.z0), new THREE.Vector2(sk.x1, sk.z1), new THREE.Vector2(sk.x0, sk.z1)]));
+    }
     const g = new THREE.ShapeGeometry(shape);
     g.rotateX(Math.PI / 2);                 // (x, z) → (x, 0, z), normal +Z → -Y (faces down)
     g.translate(0, r.ceilingH, 0);
     const uv = g.attributes.uv, pos = g.attributes.position;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i), pos.getZ(i));
     ceilGeos.push(g);
-    // downlight grid
-    const { x0, z0, x1, z1 } = r.bbox, sp = STYLE.downlight.spacing;
-    const ins = Math.min(STYLE.downlight.inset, (x1 - x0) / 2, (z1 - z0) / 2);
-    const nx = Math.max(1, Math.round((x1 - x0 - 2 * ins) / sp) + 1), nz = Math.max(1, Math.round((z1 - z0 - 2 * ins) / sp) + 1);
-    const pts = [];
-    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
-      const x = nx === 1 ? (x0 + x1) / 2 : x0 + ins + ((x1 - x0 - 2 * ins) * i) / (nx - 1);
-      const z = nz === 1 ? (z0 + z1) / 2 : z0 + ins + ((z1 - z0 - 2 * ins) * j) / (nz - 1);
-      if (pointInPoly(x, z, r.poly) && distToPoly(x, z, r.poly) > 0.3) pts.push([x, z]);
-    }
-    if (!pts.length) pts.push(r.centroid);
-    const y = r.ceilingH - 0.003;
-    for (const [x, z] of pts) {
-      disc(dl, x, y - 0.001, z, 0, R);
-      disc(trim, x, y - 0.0005, z, R, R + 0.014);
-      const s = 0.55;
-      glow.quad([x - s, y, z - s], [x + s, y, z - s], [x + s, y, z + s], [x - s, y, z + s], [0, -1, 0], [[0, 0], [1, 0], [1, 1], [0, 1]]);
-    }
-    // evening point-light anchor spots (one per ~8 m²)
-    const k = Math.max(1, Math.min(3, Math.round(r.area / 6)));
-    if (r.floor !== 'ledge' && r.id !== 'lobby') {
-      if (k === 1) spots.push({ room: r.id, x: r.centroid[0], z: r.centroid[1], y: r.ceilingH - 0.5 });
-      else {
-        const alongX = (x1 - x0) > (z1 - z0);
-        for (let i = 0; i < k; i++) {
-          const t = (i + 0.5) / k;
-          const x = alongX ? x0 + (x1 - x0) * t : r.centroid[0], z = alongX ? r.centroid[1] : z0 + (z1 - z0) * t;
-          if (pointInPoly(x, z, r.poly)) spots.push({ room: r.id, x, z, y: r.ceilingH - 0.5 });
-        }
-      }
-    }
-  }
-  // dining has no pendant → a ceiling-light anchor right above each dining table (preferred by the evening lights)
-  for (const f of P.furniture || []) {
-    if (f.type !== 'dining_table') continue;
-    const r = L.at(f.x, f.z); const ch = r ? r.ceilingH : H;
-    for (let i = spots.length - 1; i >= 0; i--) if (Math.hypot(spots[i].x - f.x, spots[i].z - f.z) < 1.3) spots.splice(i, 1);
-    spots.unshift({ room: r ? r.id : null, x: f.x, z: f.z, y: ch - 0.4, prio: true });
   }
   const ceilMesh = mergeToMesh(ceilGeos, M.ceiling, { cast: true, name: 'ceiling' });
   ceilingGroup.add(ceilMesh);
-  // the merged downlight geometry: winding check (we pushed raw), make sure it faces down
-  const fixDown = (a) => { const g = a.geometry(); return g; };
-  const dlMesh = mergeToMesh([fixDown(dl)], M.downlight, { name: 'downlights', receive: false });
-  const trimMesh = mergeToMesh([fixDown(trim)], M.downTrim, { name: 'downtrim', receive: false });
-  const glowMesh = mergeToMesh([glow.geometry()], M.glow, { name: 'glow', receive: false });
-  M.downlight.side = THREE.DoubleSide; M.downTrim.side = THREE.DoubleSide; M.glow.side = THREE.DoubleSide;
-  for (const m of [dlMesh, trimMesh, glowMesh]) if (m) ceilingGroup.add(m);
-  glowMesh.renderOrder = 2;
+  const skylights = SKY.map((sk) => buildSkylight(sk, P, M, STYLE, L, ceilingGroup));
+
+  // ---------- recessed downlights (only artificial sources) -----------------
+  const downlights = buildDownlights(P, M, STYLE, L, { wallFeatures: FEATS, skylights: SKY });
+  for (const m of downlights.fittings) ceilingGroup.add(m);
+  root.add(downlights.pools, downlights.scallops);
 
   // roof slab (= floor above): shadow caster only, follows the unit footprint so it never overhangs windows
   const roofAcc = new GeoAcc();
@@ -383,6 +340,7 @@ export function buildHouse(P, M, STYLE) {
   for (const d of P.doors) {
     if (d.type === 'swing') doors.push(buildSwing(d, P, M, STYLE, frameAcc2, acc.thresh));
     else if (d.type === 'slide') doors.push(buildSlide(d, P, M, STYLE, frameAcc, acc));
+    else if (d.type === 'bifold') doors.push(buildBifold(d, P, M, STYLE, acc));
   }
   for (const d of doors) if (d && d.group) root.add(d.group);
 
@@ -400,13 +358,14 @@ export function buildHouse(P, M, STYLE) {
   add(acc.black, M.frameBlack, { cast: true, name: 'framesBlack' });
   const cg = add(acc.clear, M.glassClear, { name: 'glassClear', receive: false }); if (cg) cg.renderOrder = 3;
   add(frameAcc2, M.doorFrame, { cast: true, name: 'doorFrames' });
+  add(acc.alw, M.alWhite, { cast: true, name: 'alWhite' });
   add(railMetalAcc, M.railMetal, { cast: true, name: 'railMetal' });
   const gm = add(glassAcc, M.glass, { name: 'glass', receive: false }); if (gm) gm.renderOrder = 3;
   const rg = add(railGlassAcc, M.railGlass, { name: 'railGlass', receive: false }); if (rg) rg.renderOrder = 3;
   const aoMesh = add(ao, M.ao, { name: 'aoStrips', receive: false }); if (aoMesh) aoMesh.renderOrder = 1;
   root.add(ceilingGroup); root.add(roofGroup);
 
-  return { root, ceilingGroup, roofGroup, colliders, doors, spots, lookup: L, aoMesh, capMesh, features, washers };
+  return { root, ceilingGroup, roofGroup, colliders, doors, lookup: L, aoMesh, capMesh, features, washers, sideSlots, skylights, downlights };
 }
 
 // ── swing door ──────────────────────────────────────────────────────────────
@@ -519,17 +478,23 @@ function buildFeature(ft, P, M, STYLE, L, ceilingGroup, root) {
   const room = L.at(...at(front + sign * 0.2));
   const y0 = ft.y0 || 0, top = Math.min(ft.y1 ?? H, room ? room.ceilingH : H);
   const u0 = a0 + g, u1 = a1 - g, yt = top - g;
+  const SS = STYLE.sideSlot, sw = ft.sideSlots ? SS.w : 0;      // recessed LED channel at each end
   const group = new THREE.Group(); group.name = 'feature_' + ft.id;
 
   // front surface: one non-repeating texture, uv 0..1 over the whole panel
-  const fA = new GeoAcc(); fA.face(axis, sign, front, u0, u1, y0, yt);
-  const fg = fA.geometry(), pos = fg.attributes.position, uv = fg.attributes.uv;
-  for (let i = 0; i < uv.count; i++) {
-    const along = thinX ? pos.getZ(i) : pos.getX(i);
-    const u = (along - a0) / (a1 - a0);
-    uv.setXY(i, sign * (thinX ? -1 : 1) > 0 ? u : 1 - u, (pos.getY(i) - y0) / (top - y0));
-  }
-  const face = new THREE.Mesh(fg, M.makeFeatureWall(a1 - a0, top - y0));
+  const faceUV = (geo) => {
+    const pos = geo.attributes.position, uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) {
+      const along = thinX ? pos.getZ(i) : pos.getX(i);
+      const u = (along - a0) / (a1 - a0);
+      uv.setXY(i, sign * (thinX ? -1 : 1) > 0 ? u : 1 - u, (pos.getY(i) - y0) / (top - y0));
+    }
+    return geo;
+  };
+  const fA = new GeoAcc(); fA.face(axis, sign, front, u0 + sw, u1 - sw, y0, yt);
+  const fg = faceUV(fA.geometry());
+  const faceMat = M.makeFeatureWall(a1 - a0, top - y0);
+  const face = new THREE.Mesh(fg, faceMat);
   face.castShadow = true; face.receiveShadow = true; face.name = 'featureFace';
   // exposed timber edges (ends + top)
   const eA = new GeoAcc(), lo = Math.min(front, back), hi = Math.max(front, back);
@@ -547,6 +512,25 @@ function buildFeature(ft, P, M, STYLE, L, ceilingGroup, root) {
   aoQuad(aoA, P2(0.06, u0), P2(0.06, u1), P2(0.3, u1), P2(0.3, u0), STYLE.ao.floor * 0.45, 0, true);
   const aoM = new THREE.Mesh(aoA.geometry(), M.ao); aoM.renderOrder = 1;
   group.add(face, edge, gap, aoM);
+  let slots = null;
+  if (ft.sideSlots) {
+    // channel: diffuser strip recessed behind the face + dark channel cheeks, at both ends, floor → ceiling
+    const rec = front - sign * SS.recess, chA = new GeoAcc(), dA = new GeoAcc();
+    const cross = thinX ? 'z' : 'x';
+    for (const [c0, c1] of [[u0, u0 + sw], [u1 - sw, u1]]) {
+      dA.face(axis, sign, rec, c0, c1, y0, yt);
+      const lo2 = Math.min(front, rec), hi2 = Math.max(front, rec);
+      chA.face(cross, 1, c0, lo2, hi2, y0, yt); chA.face(cross, -1, c1, lo2, hi2, y0, yt);
+    }
+    const strip = new THREE.Mesh(dA.geometry(), M.slotStrip); strip.name = 'slotStrip';
+    const cheeks = new THREE.Mesh(chA.geometry(), M.gap); cheeks.name = 'slotCheeks';
+    // grazing light across the textured face, baked from its height map (fades toward the middle)
+    const gA = new GeoAcc(); gA.face(axis, sign, front + sign * 0.0015, u0 + sw, u1 - sw, y0, yt);
+    const gMat = rawOutput(M.graze.clone()); gMat.map = makeGrazeTexture(faceMat.userData.canvas, a1 - a0, SS);
+    const graze = new THREE.Mesh(faceUV(gA.geometry()), gMat); graze.name = 'slotGraze'; graze.renderOrder = 4; graze.visible = false;
+    group.add(strip, cheeks, graze);
+    slots = { id: ft.id, strip, graze, mat: gMat };
+  }
   group.traverse((o) => { o.matrixAutoUpdate = false; o.updateMatrix(); });
   root.add(group);
 
@@ -578,7 +562,79 @@ function buildFeature(ft, P, M, STYLE, L, ceilingGroup, root) {
     light.add(light.target); light.target.position.sub(light.position);
     washer = { id: ft.id, slot, glow, light };
   }
-  return { id: ft.id, group, collider: { x0: ft.x0, z0: ft.z0, x1: ft.x1, z1: ft.z1, src: 'feature' }, washer };
+  return { id: ft.id, group, collider: { x0: ft.x0, z0: ft.z0, x1: ft.x1, z1: ft.z1, src: 'feature' }, washer, slots };
+}
+
+// ── skylight (LED sky panel in a deep, slightly tapered white reveal) ───────
+function buildSkylight(sk, P, M, STYLE, L, ceilingGroup) {
+  const SK = STYLE.skylight, room = L.at((sk.x0 + sk.x1) / 2, (sk.z0 + sk.z1) / 2);
+  const yc = room ? room.ceilingH : P.ceiling, d = sk.depth || 0.2, yt = yc + d, t = SK.taper;
+  const { x0, z0, x1, z1 } = sk, X0 = x0 + t, X1 = x1 - t, Z0 = z0 + t, Z1 = z1 - t;
+  const rv = new GeoAcc();
+  const quad = (a, b, c, e) => rv.quad(a, b, c, e, [0, -1, 0], [[0, 0], [1, 0], [1, 1], [0, 1]]);
+  quad([x0, yc, z0], [x1, yc, z0], [X1, yt, Z0], [X0, yt, Z0]);
+  quad([x1, yc, z0], [x1, yc, z1], [X1, yt, Z1], [X1, yt, Z0]);
+  quad([x1, yc, z1], [x0, yc, z1], [X0, yt, Z1], [X1, yt, Z1]);
+  quad([x0, yc, z1], [x0, yc, z0], [X0, yt, Z0], [X0, yt, Z1]);
+  const rg = rv.geometry(); rg.computeVertexNormals();
+  // flip normals to point into the opening (toward the shaft axis, downward)
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, n = rg.attributes.normal, p = rg.attributes.position;
+  for (let i = 0; i < n.count; i++) { const tx = cx - p.getX(i), tz = cz - p.getZ(i); if (n.getX(i) * tx + n.getZ(i) * tz < 0) n.setXYZ(i, -n.getX(i), -n.getY(i), -n.getZ(i)); }
+  M.skyReveal.side = THREE.DoubleSide;
+  const reveal = new THREE.Mesh(rg, M.skyReveal); reveal.name = 'skyReveal';
+  // thin bright rim + panel
+  const rim = new GeoAcc(), pa = new GeoAcc(), rw = 0.014;
+  rim.face('y', -1, yt - 0.001, X0, X1, Z0, Z1);
+  pa.face('y', -1, yt - 0.002, X0 + rw, X1 - rw, Z0 + rw, Z1 - rw);
+  const pg = pa.geometry(), puv = pg.attributes.uv, pp = pg.attributes.position;
+  for (let i = 0; i < puv.count; i++) puv.setXY(i, (pp.getX(i) - X0) / (X1 - X0), (pp.getZ(i) - Z0) / (Z1 - Z0));
+  M.skyPanel.side = THREE.DoubleSide; M.skyRim.side = THREE.DoubleSide;
+  const panel = new THREE.Mesh(pg, M.skyPanel); panel.name = 'skyPanel';
+  const rimM = new THREE.Mesh(rim.geometry(), M.skyRim); rimM.name = 'skyRim';
+  for (const m of [reveal, rimM, panel]) { m.matrixAutoUpdate = false; m.updateMatrix(); m.receiveShadow = false; ceilingGroup.add(m); }
+  return { id: sk.id, x: cx, z: cz, w: x1 - x0, d: z1 - z0, y: yc, top: yt, panel };
+}
+
+// ── bifold (concertina) door: two leaves, pivot at one jamb, folds out to foldTo ──
+function buildBifold(d, P, M, STYLE, acc) {
+  const group = new THREE.Group(); group.name = 'bifold_' + d.id;
+  const alongX = (d.x1 - d.x0) >= (d.z1 - d.z0);
+  const a0 = alongX ? d.x0 : d.z0, a1 = alongX ? d.x1 : d.z1;
+  const c0 = alongX ? d.z0 : d.x0, c1 = alongX ? d.z1 : d.x1, c = (c0 + c1) / 2;
+  const h = d.h || 2.1, jw = 0.03, inner0 = a0 + jw, inner1 = a1 - jw;
+  const nP = Math.max(2, d.panels || 2), Lf = (inner1 - inner0) / nP - 0.003, t = 0.032;
+  const ft = d.foldTo || (alongX ? '+z' : '+x');
+  const s = alongX ? (ft === '+z' ? -1 : 1) : (ft === '+x' ? 1 : -1);
+  const base = alongX ? 0 : -Math.PI / 2;
+  // static white aluminium lining: jambs + head
+  const B = (u0, u1, y0, y1, w0, w1) => alongX ? acc.alw.box(u0, y0, w0, u1, y1, w1) : acc.alw.box(w0, y0, u0, w1, y1, u1);
+  B(a0, inner0, 0, h, c0 - 0.006, c1 + 0.006); B(inner1, a1, 0, h, c0 - 0.006, c1 + 0.006);
+  B(a0, a1, h - 0.03, h, c0 - 0.006, c1 + 0.006);
+  // leaf geometry (local +X = 0..Lf, centred on z = 0)
+  const leaf = (withHandle) => {
+    const g = new THREE.Group(), fa = new GeoAcc(), gl = new GeoAcc(), dk = new GeoAcc(), hd = new GeoAcc();
+    const top = h - 0.035, split = 0.12 + (top - 0.12) * 0.45, st = 0.045;
+    fa.box(0, 0.01, -t / 2, st, top, t / 2); fa.box(Lf - st, 0.01, -t / 2, Lf, top, t / 2);
+    fa.box(st, 0.01, -t / 2, Lf - st, 0.12, t / 2); fa.box(st, top - 0.06, -t / 2, Lf - st, top, t / 2);
+    fa.box(st, split - 0.025, -t / 2, Lf - st, split + 0.025, t / 2);
+    gl.box(st, split + 0.025, -0.003, Lf - st, top - 0.06, 0.003);
+    for (let y = 0.135; y < split - 0.04; y += 0.03) fa.box(st, y, -t * 0.38, Lf - st, y + 0.016, t * 0.38);   // louvres
+    dk.face('z', 1, 0.0005, st, Lf - st, 0.12, split - 0.025); dk.face('z', -1, -0.0005, st, Lf - st, 0.12, split - 0.025);
+    if (withHandle) for (const sz of [1, -1]) hd.box(Lf - 0.03, 1.0, Math.min(sz * t / 2, sz * (t / 2 + 0.03)), Lf - 0.018, 1.07, Math.max(sz * t / 2, sz * (t / 2 + 0.03)));
+    const parts = [[fa, M.alWhite], [gl, M.frosted], [dk, M.gap], [hd, M.handle]];
+    for (const [a, m] of parts) if (!a.empty) { const mesh = new THREE.Mesh(a.geometry(), m); mesh.castShadow = m !== M.frosted; mesh.receiveShadow = true; g.add(mesh); }
+    return g;
+  };
+  const A = leaf(false), Bl = leaf(true);
+  const pivot = new THREE.Group();
+  if (alongX) pivot.position.set(inner0 + 0.0015, 0, c); else pivot.position.set(c, 0, inner0 + 0.0015);
+  pivot.add(A); Bl.position.set(Lf + 0.003, 0, 0); A.add(Bl);
+  group.add(pivot);
+  const box = alongX ? { x0: a0, x1: a1, z0: c0, z1: c1 } : { x0: c0, x1: c1, z0: a0, z1: a1 };
+  return {
+    type: 'bifold', id: d.id, group, A, B: Bl, base, s, maxFold: 1.45, open: 0, vel: 0, target: 0,
+    center: alongX ? [(a0 + a1) / 2, c] : [c, (a0 + a1) / 2], box: { ...box, src: 'bifold' },
+  };
 }
 
 // ── sliding door ────────────────────────────────────────────────────────────
@@ -617,7 +673,7 @@ function buildSlide(d, P, M, STYLE, frameAcc, acc) {
   // interior glass slider (rooms on both sides, neither a balcony) → slim matte-black frame + clear glass
   const side = (off) => { const [x, z] = alongX ? [(o0 + o1) / 2, c + off] : [c + off, (o0 + o1) / 2]; return roomAtP(P, x, z); };
   const sA = side(-0.3), sB = side(0.3);
-  const outdoor = (r) => !r || ['balcony', 'ledge', 'service'].includes(r.floor);
+  const outdoor = (r) => !r || OUTDOOR.includes(r.floor);
   const slim = glass && ((!outdoor(sA) && !outdoor(sB)) || STYLE.partition.balconySliders);
   const fAcc = slim ? acc.black : frameAcc, frameMat = slim ? M.frameBlack : M.frame, glassMat = slim ? M.glassClear : M.glass;
   const FW = slim ? STYLE.partition.frameW : STYLE.frame.w;
@@ -725,6 +781,8 @@ export function doorColliders(doors, out) {
         const t = d.thickness / 2 + 0.01;
         out.push({ x0: Math.min(hx, ex) - t, x1: Math.max(hx, ex) + t, z0: Math.min(hz, ez) - t, z1: Math.max(hz, ez) + t, src: 'door' });
       }
+    } else if (d.type === 'bifold') {
+      if (d.open < 0.3) out.push(d.box);
     } else {
       for (const p of d.panels) {
         const u = d.alongX ? p.g.position.x : p.g.position.z;

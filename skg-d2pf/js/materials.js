@@ -94,6 +94,43 @@ function oakTexture(cfg, mobile) {
   return tex(cv, 1 / L, 1 / (planks * cfg.plankW));
 }
 
+// ── Composite / teak decking: boards along canvas X (= room long axis), dark 5 mm gaps, staggered butt joints ──
+function deckTexture(cfg, mobile) {
+  const boards = 8, L = cfg.boardL * 2;
+  const W = mobile ? 1024 : 2048, H = mobile ? 512 : 1024;
+  const cv = canvas(W, H), g = cv.getContext('2d'), r = rng(77);
+  const bh = H / boards, pxm = W / L, gap = Math.max(2, cfg.gapW * (H / (boards * cfg.boardW)));
+  g.fillStyle = cfg.gap; g.fillRect(0, 0, W, H);
+  for (let b = 0; b < boards; b++) {
+    const y0 = b * bh + gap / 2, hh = bh - gap;
+    const off = (r() * 0.9 + 0.05) * cfg.boardL * pxm;
+    for (const x0 of [off - cfg.boardL * pxm, off, off + cfg.boardL * pxm]) {
+      const x1 = x0 + cfg.boardL * pxm - gap;
+      const base = shade(mix(cfg.color, cfg.color2, r()), (r() - 0.5) * 0.14);
+      g.fillStyle = base; g.fillRect(x0, y0, x1 - x0, hh);
+      // long streaky grain (composite brushed finish)
+      for (let k = 0; k < 34; k++) {
+        const yy = y0 + r() * hh;
+        g.strokeStyle = r() < 0.6 ? shade(base, -0.18 - r() * 0.12) : shade(base, 0.12);
+        g.globalAlpha = 0.08 + r() * 0.16; g.lineWidth = 0.5 + r() * 1.6;
+        g.beginPath(); g.moveTo(x0, yy);
+        const amp = 0.5 + r() * 1.5, f = 0.003 + r() * 0.006, p0 = r() * 6;
+        for (let x = x0; x <= x1; x += 32) g.lineTo(x, yy + Math.sin(x * f + p0) * amp);
+        g.stroke();
+      }
+      g.globalAlpha = 1;
+      // soft edge darkening (rounded board edges)
+      const eg = g.createLinearGradient(0, y0, 0, y0 + hh);
+      eg.addColorStop(0, 'rgba(0,0,0,0.22)'); eg.addColorStop(0.12, 'rgba(0,0,0,0)'); eg.addColorStop(0.88, 'rgba(0,0,0,0)'); eg.addColorStop(1, 'rgba(0,0,0,0.25)');
+      g.fillStyle = eg; g.fillRect(x0, y0, x1 - x0, hh);
+    }
+    g.fillStyle = cfg.gap;
+    for (const x0 of [off - cfg.boardL * pxm, off, off + cfg.boardL * pxm]) g.fillRect(x0 + cfg.boardL * pxm - gap, y0, gap, hh);
+  }
+  noiseDots(g, W, H, r, W * 3, 0.07, '#000', '#fff');
+  return tex(cv, 1 / L, 1 / (boards * cfg.boardW));
+}
+
 // ── Porcelain / stone tiles: canvas covers nx × ny tiles ────────────────────
 function tileTexture(cfg, mobile, seed = 3, nx = 4, ny = 4) {
   const pxPerTile = mobile ? 192 : 288;
@@ -206,6 +243,75 @@ function radialGlowTexture() {
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+// Downlight floor pool (IES-like): smooth cone (penumbra) × cos³θ falloff; uv (0.5,0.5) = beam axis.
+// Quad half-size = poolR = h·tan(beam) metres at the reference height h; vertex colours scale it per fixture.
+function poolTexture(LG) {
+  const S = 128, cv = canvas(S, S), g = cv.getContext('2d'), img = g.createImageData(S, S);
+  const outer = LG.beam, inner = LG.beam * (1 - LG.penumbra), T = Math.tan(outer);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const u = ((x + 0.5) / S - 0.5) * 2, v = ((y + 0.5) / S - 0.5) * 2;   // −1..1 → ±tan(outer) in h units
+    const rr = Math.hypot(u, v) * T, th = Math.atan(rr);
+    const cone = th >= outer ? 0 : th <= inner ? 1 : (() => { const t = (Math.cos(th) - Math.cos(outer)) / (Math.cos(inner) - Math.cos(outer)); return t * t * (3 - 2 * t); })();
+    const val = cone * Math.pow(Math.cos(th), 3);
+    const i = (y * S + x) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = Math.round(255 * val); img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.NoColorSpace; return t;
+}
+// Wall scallop of a downlight at distance d from the wall, in units of d: u ∈ [−3,3] (horizontal), t ∈ [0,6] (depth below the
+// ceiling). Lit where the cone reaches the wall; irradiance ∝ I(θ)·cos(incidence)/r². Canvas top = t 0 (ceiling).
+export const SCALLOP_U = 3, SCALLOP_T = 6;
+function scallopTexture(LG) {
+  const W = 96, H = 192, cv = canvas(W, H), g = cv.getContext('2d'), img = g.createImageData(W, H);
+  const outer = LG.beam, inner = LG.beam * (1 - LG.penumbra);
+  let peak = 0; const buf = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const u = ((x + 0.5) / W - 0.5) * 2 * SCALLOP_U, t = ((y + 0.5) / H) * SCALLOP_T;
+    const r2 = 1 + u * u + t * t, ct = t / Math.sqrt(r2), th = Math.acos(ct);
+    const cone = th >= outer ? 0 : th <= inner ? 1 : (() => { const k = (Math.cos(th) - Math.cos(outer)) / (Math.cos(inner) - Math.cos(outer)); return k * k * (3 - 2 * k); })();
+    const val = cone / Math.pow(r2, 1.5);
+    buf[y * W + x] = val; peak = Math.max(peak, val);
+  }
+  for (let i = 0; i < W * H; i++) { const v = Math.round(255 * Math.min(1, buf[i] / peak)); img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255; }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.NoColorSpace; t.userData = { peakAtUnit: peak }; return t;
+}
+// LED sky panel: saturated clear-blue gradient + very faint high cirrus
+function skyPanelTexture(SK) {
+  const W = 256, H = 512, cv = canvas(W, H), g = cv.getContext('2d'), r = rng(808);
+  const grd = g.createLinearGradient(0, 0, W * 0.3, H);
+  grd.addColorStop(0, SK.top); grd.addColorStop(1, SK.bottom);
+  g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 26; i++) {
+    const x = r() * W, y = r() * H, rw = 40 + r() * 120, rh = 4 + r() * 10;
+    g.save(); g.translate(x, y); g.rotate(-0.35 + (r() - 0.5) * 0.3); g.scale(1, rh / rw);
+    const cg = g.createRadialGradient(0, 0, 0, 0, 0, rw);
+    cg.addColorStop(0, `rgba(255,255,255,${SK.clouds * (0.5 + r())})`); cg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = cg; g.fillRect(-rw, -rw, rw * 2, rw * 2); g.restore();
+  }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+// Grazing light baked from the feature-wall height map: light from both ends, fading toward the middle, picking out relief.
+// srcCanvas = wabi-sabi texture (greyscale height). Width wM metres. Returns a texture for the M.graze blend (dst×(1+src)).
+export function makeGrazeTexture(srcCanvas, wM, cfg) {
+  const k = Math.min(1, 1024 / srcCanvas.width);
+  const W = Math.max(64, Math.round(srcCanvas.width * k)), H = Math.max(64, Math.round(srcCanvas.height * k));
+  const cv = canvas(W, H), g = cv.getContext('2d');
+  g.drawImage(srcCanvas, 0, 0, W, H);
+  const src = g.getImageData(0, 0, W, H), out = g.createImageData(W, H), pm = W / wM;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4;
+    const hl = src.data[(y * W + Math.max(0, x - 2)) * 4], hr = src.data[(y * W + Math.min(W - 1, x + 2)) * 4];
+    const d = (hr - hl) / 255;                                   // + = surface rising to the right → faces the left light
+    const uL = x / pm, uR = (W - 1 - x) / pm;
+    const fL = Math.exp(-uL / cfg.reach), fR = Math.exp(-uR / cfg.reach);
+    const v = Math.max(0, fL * (1 + cfg.relief * d) + fR * (1 - cfg.relief * d));
+    out.data[i] = out.data[i + 1] = out.data[i + 2] = Math.round(255 * Math.min(1, v * 0.8)); out.data[i + 3] = 255;
+  }
+  g.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t;
+}
+
 // ── Wabi-sabi limewash wallpaper: ONE non-repeating texture for a whole surface (w × h metres) ──
 // near-white greyscale mottle (multiplied by STYLE.featureWall.color); also used as the bump map.
 function wabiSabiTexture(cfg, wM, hM, mobile) {
@@ -264,6 +370,14 @@ function washTexture() {
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+// Multiplicative "light" materials (result = dst × (1 + src)) must output src raw: strip the sRGB output transform,
+// otherwise small factors get inflated (0.03 → 0.17) and the light spreads over whole surfaces.
+export function rawOutput(mat) {
+  mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <colorspace_fragment>', ''); };
+  mat.customProgramCacheKey = () => 'rawOutput';
+  return mat;
+}
+
 // ── Material factory ───────────────────────────────────────────────────────
 export function makeMaterials(STYLE, renderer, mobile) {
   ANISO = Math.min(mobile ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
@@ -275,6 +389,7 @@ export function makeMaterials(STYLE, renderer, mobile) {
   for (const [k, cfg] of Object.entries(STYLE.floors)) {
     let map;
     if (cfg.kind === 'oak') map = oakTexture(cfg, mobile);
+    else if (cfg.kind === 'deck') map = deckTexture(cfg, mobile);
     else if (cfg.kind === 'concrete') map = concreteTexture(cfg, mobile);
     else map = tileTexture(cfg, mobile, 3 + k.length, cfg.tileW >= 0.6 ? 4 : 6, cfg.tileH >= 0.6 ? 4 : 6);
     M.floor[k] = std({ map, roughness: cfg.roughness, metalness: 0, envMapIntensity: 0.9 });
@@ -311,12 +426,34 @@ export function makeMaterials(STYLE, renderer, mobile) {
   M.handle = std({ color: STYLE.handle.color, roughness: STYLE.handle.roughness, metalness: STYLE.handle.metalness });
   M.slideOpaque = std({ color: STYLE.slideOpaque.color, roughness: STYLE.slideOpaque.roughness });
 
-  M.downlight = new THREE.MeshBasicMaterial({ color: '#fff4e2' });
-  M.downTrim = std({ color: STYLE.downlight.trim, roughness: 0.4, metalness: 0.3 });
-  M.glow = new THREE.MeshBasicMaterial({
-    map: radialGlowTexture(), color: '#ffd29a', transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
-    depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  // recessed downlights: dark anti-glare baffle + small aperture (vertex colour = CCT, material colour = on/off level)
+  const LG = STYLE.lighting;
+  M.baffle = new THREE.MeshBasicMaterial({ color: LG.baffle, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  M.aperture = new THREE.MeshBasicMaterial({ color: '#ffffff', vertexColors: true, side: THREE.DoubleSide, toneMapped: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  // fake light (pools / scallops): result = dst × (1 + src) → brightens the lit surface in proportion to its albedo
+  M.lightDecal = new THREE.MeshBasicMaterial({
+    map: poolTexture(LG), vertexColors: true, transparent: true, depthWrite: false, toneMapped: false,
+    blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.DstColorFactor, blendDst: THREE.OneFactor,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
   });
+  M.scallopDecal = M.lightDecal.clone(); M.scallopDecal.map = scallopTexture(LG);
+  rawOutput(M.lightDecal); rawOutput(M.scallopDecal);
+  M.graze = new THREE.MeshBasicMaterial({     // feature-wall side-slot grazing light (map baked per wall by build.js)
+    color: '#000000', transparent: true, depthWrite: false, toneMapped: false,
+    blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.DstColorFactor, blendDst: THREE.OneFactor,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
+  });
+  M.slotStrip = new THREE.MeshBasicMaterial({ color: STYLE.sideSlot.stripOff, toneMapped: false });
+  // skylights
+  const SK = STYLE.skylight;
+  M.skyPanel = new THREE.MeshBasicMaterial({ map: skyPanelTexture(SK), toneMapped: false });
+  M.skyPanel.color.setScalar(SK.panelGain);
+  M.skyReveal = std({ color: SK.reveal, roughness: 0.9, emissive: '#dfeaff', emissiveIntensity: 0.55, envMapIntensity: 0.3 });
+  M.skyRim = new THREE.MeshBasicMaterial({ color: '#f4f8ff', toneMapped: false });
+  // helper-room bifold: white aluminium frame, frosted glass upper, louvres lower
+  M.alWhite = std({ color: '#f1f0ec', roughness: 0.42, metalness: 0.15 });
+  M.frosted = std({ color: '#f6f4f0', roughness: 0.55, transparent: true, opacity: 0.86, emissive: '#ffffff', emissiveIntensity: 0.06, envMapIntensity: 0.5 });
   M.ao = new THREE.MeshBasicMaterial({
     color: '#ffffff', vertexColors: true, transparent: true, depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
@@ -325,7 +462,8 @@ export function makeMaterials(STYLE, renderer, mobile) {
   const FWc = STYLE.featureWall;
   M.makeFeatureWall = (wM, hM) => {
     const map = wabiSabiTexture(FWc, wM, hM, mobile);
-    return std({ color: FWc.color, map, bumpMap: map, bumpScale: FWc.bump, roughness: FWc.roughness, envMapIntensity: 0.35 });
+    const m = std({ color: FWc.color, map, bumpMap: map, bumpScale: FWc.bump, roughness: FWc.roughness, envMapIntensity: 0.35 });
+    m.userData.canvas = map.image; return m;
   };
   M.featureEdge = std({ color: FWc.edge, map: veneerTexture({ color: '#ffffff', grain: '#d8cfc4' }, 41), roughness: 0.7 });
   M.gap = std({ color: FWc.gap, roughness: 1, envMapIntensity: 0 });

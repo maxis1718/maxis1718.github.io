@@ -2,18 +2,19 @@
 // Contract (SPEC.md): makeFurniture(item, theme) → THREE.Group, origin = footprint centre on the floor,
 // local front = +Z, fits inside item.w (X) × item.d (Z). One merged mesh per material (≲ 15 meshes/item).
 import * as THREE from 'three';
-import { Kit, mat, palette, rbox, cyl, cached, lathe, rng, setGlow } from './furniture-kit.js';
+import { Kit, mat, palette, rbox, cyl, cached, lathe, rng, setGlow, setFurnitureTextures, furnitureMaterials } from './furniture-kit.js';
+import { counterContractor, fridgeFrench, washerStack, utilityTower, speaker, speakerStand, subwoofer, ziptrack } from './furniture-r4.js';
 
-export { setGlow as setFurnitureGlow };
+export { setGlow as setFurnitureGlow, setFurnitureTextures, furnitureMaterials };
 
 const PI = Math.PI, HP = Math.PI / 2;
 
 // collide flags (SPEC: false for rugs, ceiling lights, high wall-mounted items, curtains)
-const NO_COLLIDE = new Set(['rug', 'pendant', 'tv', 'aircon_indoor', 'curtain', 'picture', 'towel_rail', 'shower']);
+const NO_COLLIDE = new Set(['rug', 'pendant', 'tv', 'aircon_indoor', 'curtain', 'picture', 'towel_rail', 'shower', 'ziptrack']);
 // shadow casters (big items only)
 const CAST = new Set(['bed', 'sofa', 'armchair', 'dining_table', 'coffee_table', 'desk', 'wardrobe', 'tall_cabinet', 'counter',
   'fridge', 'washer_dryer', 'tv_console', 'shelving', 'bookshelf', 'dining_chair', 'outdoor_table', 'outdoor_chair', 'bench',
-  'nightstand', 'side_table', 'chair', 'vanity', 'toilet', 'ac_condenser']);
+  'nightstand', 'side_table', 'chair', 'vanity', 'toilet', 'ac_condenser', 'speaker', 'speaker_stand', 'subwoofer']);
 
 const DEFAULT_H = {
   bed: 1.05, nightstand: 0.5, wardrobe: 2.4, desk: 0.75, chair: 0.95, sofa: 0.8, armchair: 0.8, coffee_table: 0.38,
@@ -21,6 +22,7 @@ const DEFAULT_H = {
   counter: 0.9, fridge: 1.85, washer_dryer: 1.85, db_box: 0.75, toilet: 0.8, vanity: 0.86, shower: 2.2, towel_rail: 0.8,
   shelving: 2.0, outdoor_table: 0.74, outdoor_chair: 0.8, ac_condenser: 0.6, aircon_indoor: 0.3, curtain: 2.6, picture: 0,
   bookshelf: 1.8, side_table: 0.5, bench: 0.45, tall_cabinet: 2.4,
+  speaker: 0.305, speaker_stand: 0.657, subwoofer: 0.256, ziptrack: 2.75,
 };
 
 // ============================================================ public API
@@ -28,6 +30,7 @@ const BUILDERS = {
   bed, nightstand, wardrobe, desk, chair, sofa, armchair, coffee_table, tv_console, tv, rug, dining_table, dining_chair,
   pendant, plant, floor_lamp, counter, fridge, washer_dryer, db_box, toilet, vanity, shower, towel_rail, shelving,
   outdoor_table, outdoor_chair, ac_condenser, aircon_indoor, curtain, picture, bookshelf, side_table, bench, tall_cabinet,
+  speaker, speaker_stand: speakerStand, subwoofer, ziptrack,
 };
 export const FURNITURE_TYPES = Object.keys(BUILDERS);
 
@@ -51,7 +54,8 @@ export function makeFurniture(item, theme) {
   let parts = _cache.get(key);
   if (!parts) {
     const K = new Kit();
-    if (fn) fn(K, { w, d, h, o, P, seed, item });
+    let dyn = null;
+    if (fn) dyn = fn(K, { w, d, h, o, P, seed, item });
     else {
       if (!_warned.has(type)) { console.warn('[furniture] unknown type "' + type + '" → placeholder box'); _warned.add(type); }
       K.box(mat('paint', '#d8d4cc'), -w / 2, w / 2, 0, item.h || 0.8, -d / 2, d / 2, 0.01, 1);
@@ -59,6 +63,7 @@ export function makeFurniture(item, theme) {
     const tmp = new THREE.Group();
     K.build(tmp, CAST.has(type));
     parts = tmp.children.map(m => ({ geometry: m.geometry, material: m.material, cast: m.castShadow, receive: m.receiveShadow, amb: !!m.material.userData.ambient }));
+    parts.dyn = typeof dyn === 'function' ? dyn : null;   // per-instance (animated) parts, e.g. ziptrack fabric + bar
     _cache.set(key, parts);
   }
   for (const p of parts) {
@@ -67,6 +72,7 @@ export function makeFurniture(item, theme) {
     if (p.amb) { m.userData.ambientGlow = true; m.castShadow = false; m.receiveShadow = false; }
     group.add(m);
   }
+  if (parts.dyn) parts.dyn(group);
   return group;
 }
 
@@ -336,6 +342,7 @@ function tv_console(K, { w, d, h, o, P }) {
     K.add(gl, cached(`glowplane|${gw2.toFixed(3)}|${reach + setback}`, () => new THREE.PlaneGeometry(gw2, reach + setback).rotateX(-HP)), 0, 0.014, z0 + (reach + setback) / 2); // y 14 mm: clears a rug
   }
   // decor kept low and clear of the TV (bottom edge ≈ 0.62 m): ceramic vase at one end, books + bowl at the other
+  if (o.decor === false) return;
   K.add(m.ceramic, lathe('lowvase', [[0, 0], [0.055, 0], [0.075, 0.05], [0.07, 0.11], [0.04, 0.16], [0.032, 0.18], [0.038, 0.19], [0, 0.19]], 20), -w / 2 + 0.2, H, -0.03);
   K.box(mat('paint', '#d9d1c4'), w / 2 - 0.42, w / 2 - 0.16, H, H + 0.028, -0.11, 0.08, 0.002, 1);
   K.box(mat('paint', '#6d675e'), w / 2 - 0.4, w / 2 - 0.19, H + 0.028, H + 0.048, -0.1, 0.06, 0.002, 1);
@@ -700,6 +707,7 @@ function shelving(K, { w, d, h, P }) {
 
 // ============================================================ kitchen
 function counter(K, { w, d, h, o, P }) {
+  if (o.style === 'contractor') return counterContractor(K, { w, d, h, o, P });
   const m = M(P);
   const W = w, D = d, H = h || 0.9;
   const island = !!o.island;
@@ -827,7 +835,8 @@ function counter(K, { w, d, h, o, P }) {
   }
 }
 
-function tall_cabinet(K, { w, d, h, P }) {
+function tall_cabinet(K, { w, d, h, o, P }) {
+  if (o.style === 'utility') return utilityTower(K, { w, d, h, P });
   const m = M(P);
   const cab = mat('paint', P.kitchenUpper, { rough: 0.85 }), hdl = mat('black', P.kitchenHandle);
   const H = h, plinth = 0.1, zf = d / 2 - 0.027;
@@ -855,7 +864,8 @@ function tall_cabinet(K, { w, d, h, P }) {
   frontsGrid(K, cab, x0, x1, 1.83, H - 0.018, zf, 1, 1, { handle: hdl, handleY: 1.83 + 0.12 });
 }
 
-function fridge(K, { w, d, h, P }) {
+function fridge(K, { w, d, h, o, P }) {
+  if (o.model === 'french') return fridgeFrench(K, { w, d, h, o, P });
   const m = M(P);
   const H = h, zf = d / 2 - 0.027, dt = 0.055;
   K.box(m.steel, -w / 2, w / 2, 0.03, H, -d / 2, zf - dt - 0.004, 0.01, 1);
@@ -885,7 +895,8 @@ function washerUnit(K, m, w, d, y0, uh, kind) {
   K.add(mat('paint', '#55595e', { rough: 0.5 }), cached('drumring' + R.toFixed(3), () => new THREE.RingGeometry(R * 0.62, R * 0.86, 32, 1)), 0, cy, zf + 0.0025);
   K.box(m.chrome, R * 0.82, R * 0.82 + 0.03, cy - 0.04, cy + 0.04, zf - 0.006, zf + 0.004, 0.004, 1);
 }
-function washer_dryer(K, { w, d, h, P }) {
+function washer_dryer(K, { w, d, h, o, P }) {
+  if (o.stacked || o.housing) return washerStack(K, { w, d, h, o, P });
   const m = M(P);
   if (h > 1.3) {
     const uh = (h - 0.03) / 2;

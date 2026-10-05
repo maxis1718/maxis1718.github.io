@@ -1,0 +1,97 @@
+{
+ "oak": {
+  "size": [
+   1.8,
+   1.52
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.8,
+  "source": "ambientCG Wood095 (CC0) + plank layout"
+ },
+ "decking": {
+  "size": [
+   2.2,
+   1.015
+  ],
+  "roughness": 1.0,
+  "normalScale": 1.0,
+  "source": "ambientCG Wood051 (CC0) + board layout"
+ },
+ "tile": {
+  "size": [
+   1.8,
+   1.8
+  ],
+  "roughness": 1.0,
+  "normalScale": 1.0,
+  "source": "ambientCG Concrete034 (CC0) graded + 600 mm grid"
+ },
+ "stone": {
+  "size": [
+   1.2,
+   1.2
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.3,
+  "source": "Poly Haven marble_rock_01 (CC0), graded"
+ },
+ "travertine": {
+  "size": [
+   1.0,
+   1.0
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.6,
+  "source": "procedural (CC0)"
+ },
+ "limewash": {
+  "size": [
+   2.0,
+   2.0
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.7,
+  "gray": true,
+  "source": "Poly Haven painted_plaster_wall (CC0) + ambientCG Concrete034 (CC0)"
+ },
+ "linen": {
+  "size": [
+   0.2,
+   0.2
+  ],
+  "roughness": 0.95,
+  "normalScale": 0.6,
+  "gray": true,
+  "source": "procedural (CC0)"
+ },
+ "boucle": {
+  "size": [
+   0.25,
+   0.25
+  ],
+  "roughness": 1.0,
+  "normalScale": 1.0,
+  "gray": true,
+  "source": "procedural (CC0)"
+ },
+ "steel": {
+  "size": [
+   0.5,
+   0.5
+  ],
+  "roughness": 1.0,
+  "metalness": 1.0,
+  "normalScale": 0.25,
+  "gray": true,
+  "source": "procedural (CC0)"
+ },
+ "frosted": {
+  "size": [
+   0.2,
+   0.2
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.4,
+  "source": "procedural (CC0)"
+ }
+}
