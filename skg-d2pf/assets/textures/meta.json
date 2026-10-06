@@ -1,15 +1,4 @@
 {
- "oak": {
-  "size": [
-   1.8,
-   1.52
-  ],
-  "roughness": 1.0,
-  "normalScale": 0.8,
-  "source": "ambientCG Wood095 (CC0) + plank layout",
-  "license": "CC0-1.0",
-  "url": "https://raw.githubusercontent.com/amazingsammed/mini_textures/main/mini_texture/textures/Wood095_diffuse.jpg"
- },
  "decking": {
   "size": [
    2.2,
@@ -21,24 +10,13 @@
   "license": "CC0-1.0",
   "url": "https://raw.githubusercontent.com/jason9075/standard_RGB/main/public/textures/Wood051/Wood051_1K-JPG_Color.jpg"
  },
- "stone": {
-  "size": [
-   1.2,
-   1.2
-  ],
-  "roughness": 1.0,
-  "normalScale": 0.3,
-  "source": "Poly Haven marble_rock_01 (CC0), graded",
-  "license": "CC0-1.0",
-  "url": "https://raw.githubusercontent.com/jasmine314-dev/dm-portal-assets/main/textures/stone_diff_1k.jpg"
- },
  "linen": {
   "size": [
    0.2,
    0.2
   ],
   "roughness": 1.0,
-  "normalScale": 0.9,
+  "normalScale": 1.2,
   "detail": 0.62,
   "source": "procedural plain weave (CC0) + ambientCG Fabric031 (CC0) fibre detail",
   "url": "https://raw.githubusercontent.com/NeoAxis/NeoAxisEngine/HEAD/Project/Assets/Content/Materials/Basic%20Library/Fabric/Textures/Fabric031_2K_Color.jpg",
@@ -59,13 +37,14 @@
  },
  "rug": {
   "size": [
-   0.48,
-   0.48
+   0.4,
+   0.4
   ],
   "roughness": 1.0,
-  "normalScale": 1.6,
+  "normalScale": 2.4,
   "detail": 0.62,
-  "source": "procedural ribbed wool/jute (CC0) + ambientCG Fabric031 (CC0) fibre detail",
+  "sheen": 0.45,
+  "source": "procedural flat-weave jute/wool (CC0) + ambientCG Fabric031 (CC0) fibre detail",
   "url": "https://raw.githubusercontent.com/NeoAxis/NeoAxisEngine/HEAD/Project/Assets/Content/Materials/Basic%20Library/Fabric/Textures/Fabric031_2K_Color.jpg",
   "license": "CC0-1.0"
  },
@@ -117,6 +96,62 @@
   "normalScale": 0.8,
   "source": "ambientCG Plaster001 (CC0) \u2014 de-lit, warm limewash",
   "url": "https://raw.githubusercontent.com/jpiedra181/vetaAtlas/HEAD/public/tex/d/cal-blanca-c.webp",
+  "license": "CC0-1.0"
+ },
+ "feature": {
+  "size": [
+   3.229,
+   2.75
+  ],
+  "roughness": 0.93,
+  "normalScale": 0.7,
+  "source": "ambientCG Plaster001 (CC0) \u2014 high-passed, tiled 1 m, + procedural low-frequency / trowel marks",
+  "url": "https://raw.githubusercontent.com/jpiedra181/vetaAtlas/HEAD/public/tex/d/cal-blanca-c.webp",
+  "license": "CC0-1.0"
+ },
+ "oakfloor": {
+  "size": [
+   3.04,
+   3.04
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.6,
+  "source": "ambientCG Wood021 (CC0) \u2014 light oak, 0.19 m planks 1.2\u20131.8 m staggered, per-plank cuts",
+  "url": "https://raw.githubusercontent.com/jpiedra181/vetaAtlas/HEAD/public/tex/d/roble-nordico-c.webp",
+  "license": "CC0-1.0"
+ },
+ "worktop": {
+  "size": [
+   1.6,
+   1.6
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.0,
+  "detail": 0.8,
+  "source": "ambientCG Marble019 (CC0) \u2014 white sintered-stone grade, soft grey veins",
+  "url": "https://raw.githubusercontent.com/jpiedra181/vetaAtlas/HEAD/public/tex/d/statuario-alba-c.webp",
+  "license": "CC0-1.0"
+ },
+ "bathwall": {
+  "size": [
+   2.4,
+   2.4
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.6,
+  "source": "ambientCG Marble005 (CC0) \u2014 600\u00d7300 tiles, per-tile cuts, 1.5 mm grout",
+  "url": "https://raw.githubusercontent.com/jpiedra181/vetaAtlas/HEAD/public/tex/d/carrara-hielo-c.webp",
+  "license": "CC0-1.0"
+ },
+ "bathfloor": {
+  "size": [
+   1.2,
+   1.2
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.6,
+  "source": "ambientCG Concrete034 (CC0) \u2014 300\u00d7300 tiles, per-tile cuts, 2.0 mm grout",
+  "url": "https://raw.githubusercontent.com/jpiedra181/vetaAtlas/HEAD/public/tex/d/cemento-tiza-c.webp",
   "license": "CC0-1.0"
  }
 }

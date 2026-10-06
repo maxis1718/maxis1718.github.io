@@ -103,11 +103,11 @@ export const STYLE = {
     oak: '#c8a57a', oakPale: '#d9c2a0', walnut: '#7b5b41', teak: '#9b6c45',
     white: '#eeebe5', cabinet: '#e8e3da', carcass: '#3a3632', black: '#262524',
     steel: '#c9cbcd', chrome: '#e9ebec', alu: '#55585b', frame: '#2a2826',
-    fabric: '#dcd4c6', fabricDark: '#7f776d', bedding: '#f4f1eb', pillow: '#ebe5da', throw: '#a8977f',
+    fabric: '#dcd3c4', fabricDark: '#7f776d', bedding: '#f4f1eb', pillow: '#ebe5da', throw: '#a8977f',
     accent: '#b97c58', accent2: '#8f9b82',                 // terracotta + sage cushions
     ceramic: '#f7f6f3', worktop: '#eeece8', stone: '#dcd7cf', glass: '#dde9e8',
     leaf: '#557a42', leaf2: '#3f6233', pot: '#cbc3b6', soil: '#3a2e24',
-    rug: '#e9e3d8', rugBorder: '#a89a83', appliance: '#f3f3f1', screen: '#0b0d0f',
+    rug: '#ebe3d6', rugBinding: '#b9a585', rugBorder: '#a89a83', appliance: '#f3f3f1', screen: '#0b0d0f',
     outdoorFabric: '#d8d0c2', lampGlow: '#ffe2b8', sheer: '#f6f3ee', drape: '#c9bca9',
     glow: 1.0,
     ledWarm: '#ffdba0',          // 2700 K strip as photographed at 3600 K (≈ wbColor(2700)); emissive only — floor light is analytic
@@ -118,10 +118,10 @@ export const STYLE = {
   // ── Look-dev (js/lookdev.js) ─────────────────────────────────────────────
   look: {
     wb: { evening: 3600 },                       // camera white balance for artificial light (wbColor)
-    floor: { origin: [12.596, 3.56], grout: '#a89880', tileVar: 0.06, env: 1.0 },   // tile grid centred on the living room
-    planar: true, planarScale: 0.5, planarScaleMobile: 0.35, reflect: 2.2,   // reflect: planar reflection gain (polished glaze)
+    floor: { origin: [12.596, 3.56], grout: '#b8a486', tileVar: 0.06, env: 1.0 },   // tile grid centred on the living room
+    planar: true, planarScale: 0.5, planarScaleMobile: 0.35, reflect: 1.15, reflectGrazing: 3.2,   // planar reflection gain face-on → at grazing angles (Fresnel-weighted)
     consoleGlow: { cct: 2700, h: 0.11, level: 10.0 },   // TV-console LED under-glow (irradiance at the strip, × 氛圍燈 fade)
-    wallRelief: 0.16, ceilingRelief: 0.05, featureRelief: 0.55, featureColor: '#ffffff',
+    wallRelief: 0.16, ceilingRelief: 0.05, featureRelief: 0.28, featureColor: '#ffffff',
   },
 
   // ── Realism layer (js/realism.js, js/fx.js, js/photo.js) ─────────────────

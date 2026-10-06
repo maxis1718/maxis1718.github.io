@@ -63,7 +63,7 @@ export function createLookdev({ renderer, scene, camera, house, M, STYLE, mobile
     ldGrout: { value: 0.0015 }, ldGroutCol: { value: new THREE.Color('#b8a993') }, ldNormalScale: { value: 0.35 },
     ldTileVar: { value: 0.05 },
     ldRefl: { value: null }, ldReflMat: { value: new THREE.Matrix4() }, ldReflOn: { value: 0 }, ldReflLod: { value: 8 },
-    ldReflStr: { value: 1 },
+    ldReflStr: { value: 1 }, ldReflGraze: { value: 3 }, ldSheen: { value: 0.45 },
     ldGlowA: { value: new THREE.Vector3() }, ldGlowB: { value: new THREE.Vector3(1, 0, 0) }, ldGlowCol: { value: new THREE.Vector3() },
     ldGlowOut: { value: new THREE.Vector2(0, 1) },
   };
@@ -95,7 +95,7 @@ varying vec3 vLdWorld;
 uniform sampler2D ldMarble; uniform sampler2D ldMarbleN; uniform sampler2D ldMarbleR;
 uniform float ldMarbleSize; uniform vec2 ldTile; uniform vec2 ldOrigin; uniform float ldGrout; uniform vec3 ldGroutCol;
 uniform float ldNormalScale; uniform float ldTileVar;
-uniform sampler2D ldRefl; uniform mat4 ldReflMat; uniform float ldReflOn; uniform float ldReflLod; uniform float ldReflStr;
+uniform sampler2D ldRefl; uniform mat4 ldReflMat; uniform float ldReflOn; uniform float ldReflLod; uniform float ldReflStr; uniform float ldReflGraze;
 ${GLOW_GLSL}
 float ldHash( vec2 p ) { p = fract( p * vec2( 123.34, 456.21 ) ); p += dot( p, p + 45.32 ); return fract( p.x * p.y ); }
 vec2 ldMuv; vec2 ldDx; vec2 ldDy; float ldFlip; float ldGroutM; float ldTint; vec3 ldNw;
@@ -152,7 +152,9 @@ void ldTileSetup() {
 			pr = textureLod( ldRefl, ruv, lod ).rgb;
 		#endif
 		float f = smoothstep( 0.0, 0.04, ruv.x ) * smoothstep( 1.0, 0.96, ruv.x ) * smoothstep( 0.0, 0.04, ruv.y ) * smoothstep( 1.0, 0.96, ruv.y );
-		radiance = mix( radiance, pr * ldReflStr, f * ( 1.0 - ldGroutM ) );
+		float nv = saturate( dot( geometryNormal, geometryViewDir ) );
+		float gain = mix( ldReflStr, ldReflGraze, pow( 1.0 - nv, 3.0 ) );    // presence grows toward grazing (Fresnel-like), ≈ physical face-on
+		radiance = mix( radiance, pr * gain, f * ( 1.0 - ldGroutM ) );
 	}
 	#endif`)
         .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n\treflectedLight.directDiffuse += ldGlow( vLdWorld ) * BRDF_Lambert( material.diffuseColor );');
@@ -166,7 +168,9 @@ void ldTileSetup() {
       Object.assign(sh.uniforms, U);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VERT_DECL)
         .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\n' + VERT_BODY);
-      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vLdWorld;\n' + GLOW_GLSL)
+      sh.uniforms.ldSheen = U.ldSheen;
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vLdWorld;\nuniform float ldSheen;\n' + GLOW_GLSL)
+        .replace('#include <lights_physical_fragment>', '{ float nvS = saturate( dot( normal, normalize( vViewPosition ) ) ); diffuseColor.rgb *= 1.0 + ldSheen * pow( 1.0 - nvS, 3.0 ); }\n#include <lights_physical_fragment>')
         .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n\treflectedLight.directDiffuse += ldGlow( vLdWorld ) * BRDF_Lambert( material.diffuseColor );');
     });
   }
@@ -286,7 +290,7 @@ void ldTileSetup() {
       F.tile.map = (!mobile && mb.map.image) ? compositeTiles(mb.map.image) : mb.map;
       F.tile.normalMap = null; F.tile.roughnessMap = null; F.tile.bumpMap = null;
       F.tile.envMapIntensity = FL.env ?? 1.0;
-      U.ldReflStr.value = LK.reflect ?? 1;
+      U.ldReflStr.value = LK.reflect ?? 1; U.ldReflGraze.value = LK.reflectGrazing ?? 3;
       patchFloor(F.tile);
       info.floor = `marble ${U.ldTile.value.x}×${U.ldTile.value.y} m, grout ${U.ldGrout.value * 1000} mm`;
       rep.push('floor:marble');
@@ -304,12 +308,14 @@ void ldTileSetup() {
         w.roughness = w === M.ceiling ? 0.95 : 0.92; w.dithering = true;
       }
       // feature wall: limewash albedo + relief, one texture across the face (no repeats)
+      const fs = sets.feature;
       scene.traverse((o) => {
-        if (!o.isMesh || o.name !== 'featureFace') return;
+        if (!o.isMesh || o.name !== 'featureFace' || !fs) return;
         o.geometry.computeBoundingBox();
         const b = o.geometry.boundingBox, w = Math.max(b.max.x - b.min.x, b.max.z - b.min.z), h = b.max.y - b.min.y;
-        const m = o.material, S = Math.max(w, h);
-        pl.apply(m, { uvSize: [w * pl.size[0] / S, h * pl.size[1] / S], normalScale: (LK.featureRelief ?? 0.9) / pl.normalScale, roughness: 1 });
+        const m = o.material;
+        fs.apply(m, { uvSize: [w, h], normalScale: (LK.featureRelief ?? 0.7) / fs.normalScale });   // face-sized map, no repeats
+        m.roughnessMap = null; m.roughness = fs.roughness;
         m.bumpMap = null; m.color.set(LK.featureColor || '#ffffff'); m.dithering = true;
         rep.push('feature');
       });
@@ -319,7 +325,7 @@ void ldTileSetup() {
         for (const sl of house.sideSlots || []) {
           const g = sl.graze.geometry; g.computeBoundingBox();
           const bb = g.boundingBox, wM = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z);
-          const img = pl.map && pl.map.image; if (!img) continue;
+          const img = fs && fs.map && fs.map.image; if (!img) continue;
           const cv = document.createElement('canvas'); const k = Math.min(1, 1024 / img.width);
           cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
           cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
@@ -338,9 +344,11 @@ void ldTileSetup() {
         const v = sets.veneer, ln = sets.linen, rg = sets.rug, tv = sets.travert;
         if (v) spec.wood = { map: v.map, normalMap: v.normalMap, roughnessMap: v.roughnessMap, size: v.size[0], normalScale: v.normalScale, roughness: 1, colorScale: det(v) };
         if (ln) spec.fabric = { map: ln.map, normalMap: ln.normalMap, roughnessMap: ln.roughnessMap, size: ln.size[0], normalScale: ln.normalScale, roughness: 1, colorScale: det(ln) };
-        if (rg) spec.rug = { map: rg.map, normalMap: rg.normalMap, roughnessMap: rg.roughnessMap, size: rg.size[0], normalScale: rg.normalScale, roughness: 0.96, colorScale: det(rg) };
+        if (rg && rg.meta && rg.meta.sheen !== undefined) U.ldSheen.value = rg.meta.sheen;
+        if (rg) spec.rug = { map: rg.map, normalMap: rg.normalMap, roughnessMap: rg.roughnessMap, size: rg.size[0], normalScale: rg.normalScale, roughness: 0.97, colorScale: det(rg) };
         if (tv) spec.sintered = { map: tv.map, normalMap: tv.normalMap, roughnessMap: tv.roughnessMap, size: tv.size[0], normalScale: tv.normalScale, roughness: 1, color: '#ffffff' };
-        if (sets.stone) spec.quartz = { roughnessMap: sets.stone.roughnessMap, normalMap: sets.stone.normalMap, size: 1.2, normalScale: 0.15, roughness: 0.9 };
+        const wt = sets.worktop;
+        if (wt) spec.quartz = { map: wt.map, roughnessMap: wt.roughnessMap, normalMap: null, size: wt.size[0], roughness: 1, colorScale: det(wt) };
         if (sets.steel) spec.metal = { normalMap: sets.steel.normalMap, roughnessMap: sets.steel.roughnessMap, size: 0.5, normalScale: 0.2, roughness: 1.0 };
         fm.setFurnitureTextures(spec);
         info.furniture = Object.keys(spec).join('+'); rep.push('furniture:' + info.furniture);

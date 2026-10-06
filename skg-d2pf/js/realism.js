@@ -314,10 +314,12 @@ export function createRealism(o) {
     const { loadTextureSets } = await import('./textures.js');
     const T0 = performance.now();
     const sets = await loadTextureSets(renderer, { mobile, base: mobile ? './assets/textures/m/' : './assets/textures/',
-      skip: ['boucle', 'travertine', 'limewash', 'frosted', 'tile'] });
+      skip: ['boucle', 'travertine', 'limewash', 'frosted', 'tile', 'oak', 'stone'] });
     const F = M.floor, rep = [];
     const TX = R.textures || {};
-    if (F.wood && sets.oak) { sets.oak.apply(F.wood, { roughness: TX.oakRoughness ?? 1.0, normalScale: 0.6 }); rep.push('oak'); }
+    if (F.wood && sets.oakfloor) { sets.oakfloor.apply(F.wood, { roughness: TX.oakRoughness ?? 1.0 }); F.wood.dithering = true; rep.push('oakfloor'); }
+    if (F.bath && sets.bathfloor) { sets.bathfloor.apply(F.bath, { roughness: 1 }); rep.push('bathfloor'); }
+    if (M.bathWall && sets.bathwall) { sets.bathwall.apply(M.bathWall, { roughness: 1 }); rep.push('bathwall'); }
     if (F.decking && sets.decking) { sets.decking.apply(F.decking, { roughness: 1.0 }); rep.push('decking'); }
     rep.push(...await look.apply(sets));
     state.textures = rep.join(',') + ` (${Math.round(performance.now() - T0)} ms)`;

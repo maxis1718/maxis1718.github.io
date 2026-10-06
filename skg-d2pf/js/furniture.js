@@ -375,6 +375,12 @@ function tv(K, { w, d, h, o, P }) {
 
 function rug(K, { w, d, P }) {
   K.box(mat('rug', P.rug), -w / 2, w / 2, 0, 0.012, -d / 2, d / 2, 0.004, 1);
+  // slim bound edge (cotton/linen binding tape, 22 mm, a hair proud of the weave)
+  const b = 0.022, e = mat('fabric', P.rugBinding || '#b9a585'), y1 = 0.0135;
+  K.box(e, -w / 2, w / 2, 0.001, y1, -d / 2, -d / 2 + b, 0.004, 1);
+  K.box(e, -w / 2, w / 2, 0.001, y1, d / 2 - b, d / 2, 0.004, 1);
+  K.box(e, -w / 2, -w / 2 + b, 0.001, y1, -d / 2 + b, d / 2 - b, 0.004, 1);
+  K.box(e, w / 2 - b, w / 2, 0.001, y1, -d / 2 + b, d / 2 - b, 0.004, 1);
 }
 
 function picture(K, { w, d, h, o, P }) {

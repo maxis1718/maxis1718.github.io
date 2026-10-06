@@ -26,7 +26,12 @@ const SETS = {
   marble: ['albedo', 'normal', 'rough', 'webp'],
   veneer: ['albedo', 'normal', 'rough', 'webp'],
   travert: ['albedo', 'normal', 'rough', 'webp'],
-  plaster: ['albedo', 'normal', 'rough', 'webp'],
+  plaster: ['normal', 'webp'],                  // wall / ceiling relief only
+  feature: ['albedo', 'normal', 'webp'],        // limewash feature wall, one map per face (3.23 × 2.75 m)
+  oakfloor: ['albedo', 'normal', 'rough', 'webp'],
+  worktop: ['albedo', 'rough', 'webp'],
+  bathwall: ['albedo', 'normal', 'rough', 'webp'],
+  bathfloor: ['albedo', 'normal', 'rough', 'webp'],
   linen: ['albedo', 'normal', 'rough', 'webp'],
   rug: ['albedo', 'normal', 'webp'],
 };
