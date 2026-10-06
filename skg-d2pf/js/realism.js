@@ -16,6 +16,7 @@
 //   any input returns to real-time instantly.
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+import { createLookdev } from './lookdev.js';
 
 const OUTDOOR = ['balcony', 'decking', 'ledge', 'service'];
 
@@ -177,8 +178,16 @@ export function createRealism(o) {
   }
 
   // camera white balance: a photographer shoots interiors at ~3500–4000 K, so 3000 K fittings read warm, not orange
-  const WB = R.whiteBalance ?? 0.3;
-  if (WB && house.downlights) for (const f of house.downlights.fixtures) f.color.lerp(new THREE.Color(1, 1, 1), WB);
+  const WB = R.whiteBalance ?? 1;
+  if (WB && house.downlights) {
+    for (const f of house.downlights.fixtures) if (f.cct && STYLE.wbColor) f.color.set(STYLE.kelvin(f.cct)).lerp(new THREE.Color(STYLE.wbColor(f.cct)), WB);
+    // aperture discs carry the fixture colour as vertex colours (built before this pass) → refresh
+    const ap = house.downlights.fittings && house.downlights.fittings.find((m) => m.name === 'dlAperture');
+    const col = ap && ap.geometry.attributes.color, nf = house.downlights.fixtures.length;
+    if (col && nf) { const per = col.count / nf; for (let i = 0; i < col.count; i++) { const c = house.downlights.fixtures[Math.floor(i / per)].color; col.setXYZ(i, c.r, c.g, c.b); } col.needsUpdate = true; }
+  }
+  // look-dev layer (floor tiles + planar reflection, console glow, photographic furniture maps)
+  const look = createLookdev({ renderer, scene, camera, house, M, STYLE, mobile, params, P });
 
   // ── glass ─────────────────────────────────────────────────────────────────
   const glassMats = new Set([M.glass, M.glassClear, M.railGlass].filter(Boolean));
@@ -252,11 +261,13 @@ export function createRealism(o) {
     // nudge the probe out of furniture / walls (sample free spot near centroid)
     cubeCam.position.set(cx, py, cz);
     const prevEnv = scene.environment;
+    look.suspend(true);
     for (const ob of hideDuringProbe) ob.visible = false;
     const prevFog = scene.fog;
     cubeCam.update(renderer, scene);
     scene.fog = prevFog;
     for (const ob of hideDuringProbe) ob.visible = true;
+    look.suspend(false);
     let entry = probeCache.get(key);
     if (!entry && probeCache.size >= probeMax) {          // evict least recently used (but never the current one)
       let oldK = null, oldT = Infinity;
@@ -302,34 +313,15 @@ export function createRealism(o) {
     if (!flags.tex) { state.textures = 'off'; return; }
     const { loadTextureSets } = await import('./textures.js');
     const T0 = performance.now();
-    const sets = await loadTextureSets(renderer, { mobile, base: mobile ? './assets/textures/m/' : './assets/textures/' });
+    const sets = await loadTextureSets(renderer, { mobile, base: mobile ? './assets/textures/m/' : './assets/textures/',
+      skip: ['boucle', 'travertine', 'limewash', 'frosted', 'tile'] });
     const F = M.floor, rep = [];
     const TX = R.textures || {};
     if (F.wood && sets.oak) { sets.oak.apply(F.wood, { roughness: TX.oakRoughness ?? 1.0, normalScale: 0.6 }); rep.push('oak'); }
-    if (F.tile && sets.tile) { sets.tile.apply(F.tile, { roughness: TX.tileRoughness ?? 0.7, normalScale: 0.5 }); rep.push('tile'); }
-    if (F.lobby && sets.tile) { sets.tile.apply(F.lobby, { keepColor: true, roughness: 0.8 }); rep.push('lobby'); }
     if (F.decking && sets.decking) { sets.decking.apply(F.decking, { roughness: 1.0 }); rep.push('decking'); }
-    if (M.wall && sets.limewash) {            // subtle plaster relief (paint colour unchanged)
-      for (const w of [M.wall, M.facade, M.ceiling]) {
-        if (!w) continue;
-        const keep = w.map; sets.limewash.apply(w, { normalScale: w === M.ceiling ? 0.12 : 0.22, roughness: 1 }); w.map = keep;
-        w.roughness = w === M.ceiling ? 0.95 : 0.9; w.roughnessMap = null;
-      }
-      rep.push('limewash');
-    }
-    // furniture: inject into the cached kit materials (works on the batched meshes too)
-    try {
-      const fm = await import('./furniture.js');
-      if (fm.setFurnitureTextures) {
-        const spec = {};
-        if (sets.linen) spec.fabric = { map: sets.linen.map, normalMap: sets.linen.normalMap, size: 0.22, normalScale: 0.7 };
-        if (sets.steel) spec.metal = { normalMap: sets.steel.normalMap, roughnessMap: sets.steel.roughnessMap, size: 0.5, normalScale: 0.2, roughness: 1.0 };
-        if (sets.stone) spec.quartz = { roughnessMap: sets.stone.roughnessMap, normalMap: sets.stone.normalMap, size: 1.2, normalScale: 0.15, roughness: 0.9 };
-        if (sets.travertine) spec.sintered = { normalMap: sets.travertine.normalMap, roughnessMap: sets.travertine.roughnessMap, size: 1.0, normalScale: 0.35, roughness: 1.0 };
-        fm.setFurnitureTextures(spec); rep.push('furniture:' + Object.keys(spec).join('+'));
-      }
-    } catch (e) { console.warn('[realism] furniture textures skipped', e && e.message); }
+    rep.push(...await look.apply(sets));
     state.textures = rep.join(',') + ` (${Math.round(performance.now() - T0)} ms)`;
+    state.sets = Object.keys(sets);
   }
 
   // ── material pass: box projection on every lit standard material inside the house ────────────────────────────
@@ -380,6 +372,8 @@ export function createRealism(o) {
       const { createFX, PRESETS } = await import('./fx.js');
       if (R.fx) for (const k in R.fx) if (PRESETS[k]) Object.assign(PRESETS[k], R.fx[k]);
       fx = createFX({ renderer, scene, camera, quality: flags.fx, mobile });
+      const LG = STYLE.lighting;      // fake pools multiply the linear HDR buffer here (not the tone-mapped frame)
+      if (fx.quality !== 'off' && LG.poolHDR) { LG.pool = LG.poolHDR; LG.scallop = LG.scallopHDR ?? LG.scallop; }
       state.fx = fx.quality;
     } catch (e) { console.warn('[realism] fx unavailable', e && e.message); state.errors.push('fx: ' + (e && e.message)); fx = null; }
   }
@@ -435,7 +429,8 @@ export function createRealism(o) {
     hud && hud.setPhoto && hud.setPhoto({ armed: photoArmed, tracing: p.tracing && p.samples > 0, samples: Math.floor(p.samples), max: photo ? photo.options.maxSamples : 0, opacity: p.opacity });
   }
 
-  function rasterRender() { if (fx) fx.render(); else renderer.render(scene, camera); }
+  let lastCtx = null;
+  function rasterRender() { look.beforeRender(lastCtx); if (fx) fx.render(); else renderer.render(scene, camera); }
 
   // ── per-frame ─────────────────────────────────────────────────────────────
   function update(dt, ctx) {
@@ -446,6 +441,7 @@ export function createRealism(o) {
   }
   let wasTracing = false;
   function render(ctx) {
+    lastCtx = ctx;
     if (!photo && photoArmed && ctx.mode === 'walk' && ctx.cameraIdle > photoDelay() * 0.6 && state.ready) loadPhoto();   // lazy: first use
     if (photo && photoArmed && ctx.mode === 'walk') {
       photo.render(ctx);
@@ -475,7 +471,7 @@ export function createRealism(o) {
   })());
 
   return {
-    start, update, render, onTheme, rasterRender,
+    start, update, render, onTheme, rasterRender, look,
     get fx() { return fx; }, get photo() { return photo; },
     get photoArmed() { return photoArmed; },
     togglePhoto() { return setPhotoArmed(!photoArmed, true); },
@@ -495,7 +491,7 @@ export function createRealism(o) {
     info() {
       return { ...state, fx: fx ? fx.info() : null, toneMapping: renderer.toneMapping, exposure: renderer.toneMappingExposure,
         portals: portalPool.filter((l) => l.visible).length, portalDefs: portalDefs.length, probeKey: probeKeyCur, probes: probeCache.size,
-        photoArmed, photoSupported, photo: photo ? photo.info() : null };
+        photoArmed, photoSupported, photo: photo ? photo.info() : null, look: look.info() };
     },
     get isReady() { return state.ready; },
   };

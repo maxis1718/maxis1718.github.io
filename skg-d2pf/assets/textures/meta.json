@@ -6,7 +6,9 @@
   ],
   "roughness": 1.0,
   "normalScale": 0.8,
-  "source": "ambientCG Wood095 (CC0) + plank layout"
+  "source": "ambientCG Wood095 (CC0) + plank layout",
+  "license": "CC0-1.0",
+  "url": "https://raw.githubusercontent.com/amazingsammed/mini_textures/main/mini_texture/textures/Wood095_diffuse.jpg"
  },
  "decking": {
   "size": [
@@ -15,16 +17,9 @@
   ],
   "roughness": 1.0,
   "normalScale": 1.0,
-  "source": "ambientCG Wood051 (CC0) + board layout"
- },
- "tile": {
-  "size": [
-   1.8,
-   1.8
-  ],
-  "roughness": 1.0,
-  "normalScale": 1.0,
-  "source": "ambientCG Concrete034 (CC0) graded + 600 mm grid"
+  "source": "ambientCG Wood051 (CC0) + board layout",
+  "license": "CC0-1.0",
+  "url": "https://raw.githubusercontent.com/jason9075/standard_RGB/main/public/textures/Wood051/Wood051_1K-JPG_Color.jpg"
  },
  "stone": {
   "size": [
@@ -33,46 +28,21 @@
   ],
   "roughness": 1.0,
   "normalScale": 0.3,
-  "source": "Poly Haven marble_rock_01 (CC0), graded"
- },
- "travertine": {
-  "size": [
-   1.0,
-   1.0
-  ],
-  "roughness": 1.0,
-  "normalScale": 0.6,
-  "source": "procedural (CC0)"
- },
- "limewash": {
-  "size": [
-   2.0,
-   2.0
-  ],
-  "roughness": 1.0,
-  "normalScale": 0.7,
-  "gray": true,
-  "source": "Poly Haven painted_plaster_wall (CC0) + ambientCG Concrete034 (CC0)"
+  "source": "Poly Haven marble_rock_01 (CC0), graded",
+  "license": "CC0-1.0",
+  "url": "https://raw.githubusercontent.com/jasmine314-dev/dm-portal-assets/main/textures/stone_diff_1k.jpg"
  },
  "linen": {
   "size": [
    0.2,
    0.2
   ],
-  "roughness": 0.95,
-  "normalScale": 0.6,
-  "gray": true,
-  "source": "procedural (CC0)"
- },
- "boucle": {
-  "size": [
-   0.25,
-   0.25
-  ],
   "roughness": 1.0,
-  "normalScale": 1.0,
-  "gray": true,
-  "source": "procedural (CC0)"
+  "normalScale": 0.9,
+  "detail": 0.62,
+  "source": "procedural plain weave (CC0) + ambientCG Fabric031 (CC0) fibre detail",
+  "url": "https://raw.githubusercontent.com/NeoAxis/NeoAxisEngine/HEAD/Project/Assets/Content/Materials/Basic%20Library/Fabric/Textures/Fabric031_2K_Color.jpg",
+  "license": "CC0-1.0"
  },
  "steel": {
   "size": [
@@ -83,15 +53,70 @@
   "metalness": 1.0,
   "normalScale": 0.25,
   "gray": true,
-  "source": "procedural (CC0)"
+  "source": "procedural (CC0)",
+  "license": "CC0-1.0",
+  "url": "(generated in tools/realism-textures.py)"
  },
- "frosted": {
+ "rug": {
   "size": [
-   0.2,
-   0.2
+   0.48,
+   0.48
+  ],
+  "roughness": 1.0,
+  "normalScale": 1.6,
+  "detail": 0.62,
+  "source": "procedural ribbed wool/jute (CC0) + ambientCG Fabric031 (CC0) fibre detail",
+  "url": "https://raw.githubusercontent.com/NeoAxis/NeoAxisEngine/HEAD/Project/Assets/Content/Materials/Basic%20Library/Fabric/Textures/Fabric031_2K_Color.jpg",
+  "license": "CC0-1.0"
+ },
+ "marble": {
+  "size": [
+   1.6,
+   1.6
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.35,
+  "source": "ambientCG Marble004 (CC0) \u2014 de-lit, graded crema marfil",
+  "url": "https://raw.githubusercontent.com/jpiedra181/vetaAtlas/HEAD/public/tex/d/marfil-levante-c.webp",
+  "license": "CC0-1.0",
+  "tile": [
+   1.2,
+   0.6
+  ],
+  "grout": 0.0015
+ },
+ "veneer": {
+  "size": [
+   0.7,
+   0.7
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.5,
+  "detail": 0.62,
+  "source": "ambientCG Wood021 (CC0) \u2014 de-lit, light oak, detail-normalised",
+  "url": "https://raw.githubusercontent.com/jpiedra181/vetaAtlas/HEAD/public/tex/d/roble-nordico-c.webp",
+  "license": "CC0-1.0"
+ },
+ "travert": {
+  "size": [
+   1.2,
+   1.2
   ],
   "roughness": 1.0,
   "normalScale": 0.4,
-  "source": "procedural (CC0)"
+  "source": "ambientCG Travertine009 (CC0) \u2014 de-lit, honed ivory",
+  "url": "https://raw.githubusercontent.com/jpiedra181/vetaAtlas/HEAD/public/tex/d/travertino-albar-c.webp",
+  "license": "CC0-1.0"
+ },
+ "plaster": {
+  "size": [
+   2.4,
+   2.4
+  ],
+  "roughness": 1.0,
+  "normalScale": 0.8,
+  "source": "ambientCG Plaster001 (CC0) \u2014 de-lit, warm limewash",
+  "url": "https://raw.githubusercontent.com/jpiedra181/vetaAtlas/HEAD/public/tex/d/cal-blanca-c.webp",
+  "license": "CC0-1.0"
  }
 }

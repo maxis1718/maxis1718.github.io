@@ -339,7 +339,7 @@ function tv_console(K, { w, d, h, o, P }) {
     K.box(led, -w / 2 + rf, w / 2 - rf, kick - 0.006, kick - 0.001, d / 2 - setback + 0.004, d / 2 - setback + 0.016);
     const reach = 0.35, z0 = d / 2 - setback, gl = mat('floorglow', P.ledWarm, { opacity: 0.85 });
     const gw2 = w - 2 * rf * 0.4;
-    K.add(gl, cached(`glowplane|${gw2.toFixed(3)}|${reach + setback}`, () => new THREE.PlaneGeometry(gw2, reach + setback).rotateX(-HP)), 0, 0.014, z0 + (reach + setback) / 2); // y 14 mm: clears a rug
+    if (P.ledFloorGlow !== false) K.add(gl, cached(`glowplane|${gw2.toFixed(3)}|${reach + setback}`, () => new THREE.PlaneGeometry(gw2, reach + setback).rotateX(-HP)), 0, 0.014, z0 + (reach + setback) / 2); // y 14 mm: clears a rug
   }
   // decor kept low and clear of the TV (bottom edge ≈ 0.62 m): ceramic vase at one end, books + bowl at the other
   if (o.decor === false) return;

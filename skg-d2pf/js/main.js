@@ -220,7 +220,7 @@ function collectAmbient(group) {
   });
 }
 const _off = new THREE.Color(STYLE.washer.slotOff), _on = new THREE.Color(), _tmp = new THREE.Color();
-const slotCol = new THREE.Color(kelvin(STYLE.sideSlot.cct)), slotOff = new THREE.Color(STYLE.sideSlot.stripOff);
+const slotCol = new THREE.Color(STYLE.wbColor ? STYLE.wbColor(STYLE.sideSlot.cct) : kelvin(STYLE.sideSlot.cct)), slotOff = new THREE.Color(STYLE.sideSlot.stripOff);
 const grazeCol = slotCol.clone().lerp(new THREE.Color(1, 1, 1), STYLE.sideSlot.whiten ?? 0);
 function applyAmbient() {
   const A = (THEMES[currentTheme] || THEMES.day).ambient || { slot: 1, wallGlow: 0.5, light: 2, furniture: 1 };
@@ -233,6 +233,7 @@ function applyAmbient() {
   _on.copy(slotCol).multiplyScalar(A.slot);
   M.slotStrip.color.copy(_tmp.copy(slotOff).lerp(_on, k));
   for (const sl of house.sideSlots) { sl.mat.color.copy(grazeCol).multiplyScalar(STYLE.sideSlot.strength * A.wallGlow * k); sl.graze.visible = k > 0.002; }
+  if (typeof realism !== 'undefined' && realism && realism.look) realism.look.setGlow(k * (A.furniture ?? 1));
   for (const it of ambientItems) {
     if (it.basic) { if (it.transp) it.mat.opacity = it.op * k * A.furniture; else if (it.col) it.mat.color.copy(_tmp.copy(it.col).multiplyScalar(Math.max(0.12, k * A.furniture))); }
     else { it.mat.emissiveIntensity = it.ei * k * A.furniture; if (it.transp) it.mat.opacity = it.op * Math.max(k, 0); }

@@ -54,10 +54,10 @@ export const STYLE = {
   sideSlot: {
     cct: 2700, w: 0.025, recess: 0.015,
     stripOff: '#d9d4cc',       // diffuser colour when off
-    reach: 0.28,               // m — e-folding distance of the grazing light across the face (fades toward the middle)
-    strength: 0.85,            // peak brightening at the very edge (multiplicative, 0..~1.5) — keep subtle
+    reach: 0.2,                // m — e-folding distance of the grazing light across the face (fades toward the middle)
+    strength: 0.32,            // peak brightening at the very edge (multiplicative, 0..~1.5) — keep subtle
     relief: 6.0,
-    whiten: 0.4,               // mix the 2700K colour toward white (camera white-balance feel; 0 = raw CCT)               // how strongly the grazing light picks out the trowel relief
+    whiten: 0.0,               // mix the 2700K colour toward white (camera white-balance feel; 0 = raw CCT)               // how strongly the grazing light picks out the trowel relief
   },
 
   // ── Skylights (PLAN.features type:'skylight') — LED sky panels ────────────
@@ -77,7 +77,9 @@ export const STYLE = {
     baffleR: 0.0375, apertureR: 0.013, baffle: '#141414',
     beam: 0.56, penumbra: 0.7,                 // SpotLight half-angle (rad) / penumbra — medium beam, soft edge
     spots: 8, spotsMobile: 6, spotIntensity: 5, spotDistance: 7, fade: 0.35,
-    pool: 1.5, scallop: 1.3,                 // fake light pools (floor) / wall scallops for fixtures without a SpotLight
+    poolHDR: 0.9, scallopHDR: 0.9,           // same, when the desktop HDR composer runs (multiplies linear radiance)
+    pool: 0.45, scallop: 0.5,                // fake light pools (floor) / wall scallops for fixtures without a SpotLight — multiply the
+                                             // tone-mapped frame (dst × (1 + k)), so ≈ 0.4 ≙ a real spot's ×2 linear; 1.5 blew floors out
     scallopReach: 1.0,                         // only walls within this distance of a fixture get a scallop
   },
 
@@ -101,22 +103,33 @@ export const STYLE = {
     oak: '#c8a57a', oakPale: '#d9c2a0', walnut: '#7b5b41', teak: '#9b6c45',
     white: '#eeebe5', cabinet: '#e8e3da', carcass: '#3a3632', black: '#262524',
     steel: '#c9cbcd', chrome: '#e9ebec', alu: '#55585b', frame: '#2a2826',
-    fabric: '#cfc5b5', fabricDark: '#7f776d', bedding: '#f4f1eb', pillow: '#ebe5da', throw: '#a8977f',
+    fabric: '#dcd4c6', fabricDark: '#7f776d', bedding: '#f4f1eb', pillow: '#ebe5da', throw: '#a8977f',
     accent: '#b97c58', accent2: '#8f9b82',                 // terracotta + sage cushions
     ceramic: '#f7f6f3', worktop: '#eeece8', stone: '#dcd7cf', glass: '#dde9e8',
     leaf: '#557a42', leaf2: '#3f6233', pot: '#cbc3b6', soil: '#3a2e24',
     rug: '#e9e3d8', rugBorder: '#a89a83', appliance: '#f3f3f1', screen: '#0b0d0f',
     outdoorFabric: '#d8d0c2', lampGlow: '#ffe2b8', sheer: '#f6f3ee', drape: '#c9bca9',
     glow: 1.0,
+    ledWarm: '#ffdba0',          // 2700 K strip as photographed at 3600 K (≈ wbColor(2700)); emissive only — floor light is analytic
+    ledGlow: 1.1, ledFloorGlow: false,
   },
   accent: '#c79a6b',
+
+  // ── Look-dev (js/lookdev.js) ─────────────────────────────────────────────
+  look: {
+    wb: { evening: 3600 },                       // camera white balance for artificial light (wbColor)
+    floor: { origin: [12.596, 3.56], grout: '#a89880', tileVar: 0.06, env: 1.0 },   // tile grid centred on the living room
+    planar: true, planarScale: 0.5, planarScaleMobile: 0.35, reflect: 2.2,   // reflect: planar reflection gain (polished glaze)
+    consoleGlow: { cct: 2700, h: 0.11, level: 10.0 },   // TV-console LED under-glow (irradiance at the strip, × 氛圍燈 fade)
+    wallRelief: 0.16, ceilingRelief: 0.05, featureRelief: 0.55, featureColor: '#ffffff',
+  },
 
   // ── Realism layer (js/realism.js, js/fx.js, js/photo.js) ─────────────────
   realism: {
     toneMapping: 'neutral',      // 'neutral' (Khronos PBR Neutral) | 'agx' | 'aces'  (URL ?tm= overrides for A/B tests)
     pcss: { sunAngleDeg: 1.6, maxBlockerDist: 4.0, minTexels: 1.25 },   // desktop contact-hardening sun shadows
     portals: 5, portalsMobile: 2,  // window "portal" area lights assigned to the openings of the current room
-    whiteBalance: 0.3,           // lerp downlight CCT colours toward white (camera WB ≈ 3800 K)
+    whiteBalance: 1,             // 1 = downlight colours through STYLE.wbColor (camera WB, STYLE.look.wb), 0 = raw CCT
     aoStripsWithSSAO: 0.45,      // fake AO strip strength while N8AO runs (desktop)
     textures: { tileRoughness: 0.7, oakRoughness: 1.0 },   // multipliers on the photographic roughness maps
     photoIdle: 1.5,              // s of stillness before photo mode starts (desktop, automatic)
@@ -141,6 +154,19 @@ export function kelvin(K) {
 }
 STYLE.kelvin = kelvin;
 
+// Camera white balance (photographer's view): a light of colour temperature K photographed with the camera set to camK.
+// Returns an sRGB hex normalised to max channel 1 (intensity is set separately). Evening interiors are shot at ~3600 K, so
+// 3500 K living-room downlights read near-neutral, 3000 K bedrooms / 2700 K LED strips warm-cream (not orange), 3900 K
+// kitchen slightly cool. Every artificial light colour goes through this (STYLE.look.wb.evening).
+export function wbColor(K, camK = (STYLE.look && STYLE.look.wb && STYLE.look.wb.evening) || 3600) {
+  const lin = (h) => [1, 3, 5].map((i) => { const c = parseInt(h.slice(i, i + 2), 16) / 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
+  const a = lin(kelvin(K)), w = lin(kelvin(camK));
+  const c = a.map((v, i) => v / Math.max(1e-4, w[i])), m = Math.max(...c);
+  const enc = (v) => { v = Math.max(0, Math.min(1, v / m)); v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; return Math.round(v * 255).toString(16).padStart(2, '0'); };
+  return '#' + c.map(enc).join('');
+}
+STYLE.wbColor = wbColor;
+
 export const THEMES = {
   day: {
     name: 'day',
@@ -159,7 +185,7 @@ export const THEMES = {
     // 氛圍燈 ambient lighting (feature-wall washer + TV console under-glow); `on` = default when switching to this theme
     ambient: { on: false, slot: 1.3, wallGlow: 0.6, furniture: 0.8 },   // slot = channel diffuser brightness, wallGlow × sideSlot.strength
     // realism layer: replaces exposure, scales hemi/sun, env (probe) intensity, HDR sky gain, window portal lights
-    realism: { exposure: 1.1, hemi: 0.5, hemiGround: '#cbc4b8', sun: 1.0, sunColor: '#ffdcb2', env: 0.55, skyGain: 2.2, portal: { intensity: 2.4, color: '#e6eef8', covered: 0.6, blinds: 0.35 } },
+    realism: { exposure: 0.9, hemi: 0.55, hemiGround: '#cbc4b8', sun: 0.85, sunColor: '#ffeedb', env: 0.55, skyGain: 2.2, portal: { intensity: 2.4, color: '#e6eef8', covered: 0.6, blinds: 0.35 } },
   },
   evening: {
     name: 'evening',
@@ -175,7 +201,7 @@ export const THEMES = {
     groundColor: '#1a2132',
     overviewBg: ['#0b1630', '#2b3b63', '#5a5675'],   // dusk gradient (matches evening sky)
     lampGlow: 1.0,
-    ambient: { on: true, slot: 2.0, wallGlow: 1.0, furniture: 1.0 },
-    realism: { exposure: 1.1, hemi: 0.7, hemiSky: '#f2dcc4', hemiGround: '#9c8b7a', env: 0.5, skyGain: 1.0, apertures: 14, portal: { intensity: 0.06, color: '#4a6290', covered: 0.7, blinds: 0.5 } },
+    ambient: { on: true, slot: 1.15, wallGlow: 1.4, furniture: 1.0 },
+    realism: { exposure: 0.95, hemi: 0.7, hemiSky: '#f0dfca', hemiGround: '#9c8b7a', env: 0.5, skyGain: 1.0, apertures: 14, portal: { intensity: 0.06, color: '#4a6290', covered: 0.7, blinds: 0.5 } },
   },
 };

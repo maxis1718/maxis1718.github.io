@@ -22,12 +22,19 @@ const SETS = {
   boucle: ['albedo', 'normal'],
   steel: ['albedo', 'normal', 'rough'],
   frosted: ['normal', 'rough'],
+  // look-dev sets (tools/lookdev-textures.py): WebP, desktop 2048 / mobile 1024
+  marble: ['albedo', 'normal', 'rough', 'webp'],
+  veneer: ['albedo', 'normal', 'rough', 'webp'],
+  travert: ['albedo', 'normal', 'rough', 'webp'],
+  plaster: ['albedo', 'normal', 'rough', 'webp'],
+  linen: ['albedo', 'normal', 'rough', 'webp'],
+  rug: ['albedo', 'normal', 'webp'],
 };
 
-export async function loadTextureSets(renderer, { mobile = false, base = './assets/textures/', only = null } = {}) {
+export async function loadTextureSets(renderer, { mobile = false, base = './assets/textures/', only = null, skip = [] } = {}) {
   const meta = await fetch(base + 'meta.json').then((r) => r.json());
   const loader = new THREE.TextureLoader();
-  const aniso = Math.min(mobile ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
+  const aniso = Math.min(mobile ? 8 : 16, renderer.capabilities.getMaxAnisotropy());
   const load = (file, srgb) => new Promise((res) => {
     loader.load(base + file, (t) => {
       t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
@@ -38,17 +45,18 @@ export async function loadTextureSets(renderer, { mobile = false, base = './asse
     }, undefined, () => { console.warn('[tex] missing', file); res(null); });
   });
   const out = {};
-  await Promise.all(Object.entries(SETS).filter(([k]) => !only || only.includes(k)).map(async ([name, maps]) => {
+  await Promise.all(Object.entries(SETS).filter(([k]) => (!only || only.includes(k)) && !skip.includes(k)).map(async ([name, maps]) => {
     const m = meta[name] || {};
+    const ext = maps.includes('webp') ? 'webp' : 'jpg';
     const [map, normalMap, roughnessMap] = await Promise.all([
-      maps.includes('albedo') ? load(`${name}_albedo.jpg`, true) : null,
-      maps.includes('normal') ? load(`${name}_normal.jpg`, false) : null,
-      maps.includes('rough') ? load(`${name}_rough.jpg`, false) : null,
+      maps.includes('albedo') ? load(`${name}_albedo.${ext}`, true) : null,
+      maps.includes('normal') ? load(`${name}_normal.${ext}`, false) : null,
+      maps.includes('rough') ? load(`${name}_rough.${ext}`, false) : null,
     ]);
     const size = m.size || [1, 1];
     const set = {
       name, map, normalMap, roughnessMap, size,
-      normalScale: m.normalScale ?? 1, roughness: m.roughness ?? 1, metalness: m.metalness ?? 0, gray: !!m.gray, source: m.source,
+      normalScale: m.normalScale ?? 1, roughness: m.roughness ?? 1, metalness: m.metalness ?? 0, gray: !!m.gray, source: m.source, meta: m,
       textures: [map, normalMap, roughnessMap].filter(Boolean),
       setRepeat(u, v) { for (const t of this.textures) t.repeat.set(u, v); return this; },
       /** Patch an existing MeshStandardMaterial. opts.uvSize = [w,h] metres covered by the surface's 0..1 UVs (else UVs are metres).
