@@ -82,6 +82,7 @@ export function loadImage(id) {
   return imgs.get(id);
 }
 export const isFailed = (id) => failed.has(id);
+export function resetFailed() { for (const id of failed) imgs.delete(id); failed.clear(); }
 
 // ---------- pixelation ----------
 // Returns {img: canvas (colour, with 1px ink outline), sil: canvas (solid silhouette), w, h}

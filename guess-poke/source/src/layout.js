@@ -29,12 +29,13 @@ export function computeLayout(W, H) {
   const bigK = target >= 130 ? 2 : 1;
   const Nb = Math.floor(target / bigK);
   const Ns = cardW - 12;
+  const Np = Math.min(Ns, Math.floor((CW - 8) / 7) + 4);
   return {
     W, H, CW, x0, gap, cards, cardW, cardH, cardsY,
     frame: { x: frameX, y: frameY, w: frameW, h: frameH, cx: frameX + frameW / 2, cy: frameY + frameH / 2 },
     banner: { y: bannerY, h: bannerH, cx: x0 + CW / 2 },
     top: { y: 6, h: 22 },
     mute: { x: x0 + CW - 30, y: 4, w: 26, h: 26 },
-    bigK, Nb, Ns,
+    bigK, Nb, Ns, Np,
   };
 }

@@ -28,7 +28,7 @@ function resize() {
   // integer device-pixel scale so every game pixel is the same size
   const portrait = vh >= vw * 1.25;
   if (portrait) S = Math.max(1, Math.round(dw / 272));
-  else S = Math.max(1, Math.round(dh / 520));
+  else S = Math.max(1, Math.round(dh / 380));
   W = Math.floor(dw / S); H = Math.floor(dh / S);
   if (portrait && W > 300) { S++; W = Math.floor(dw / S); H = Math.floor(dh / S); }
   canvas.width = W; canvas.height = H;

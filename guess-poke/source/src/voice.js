@@ -1,5 +1,6 @@
 // Mandarin (Taiwan) speech via the Web Speech API. Fully optional: silently no-ops if unavailable.
 const SS = typeof window !== 'undefined' && window.speechSynthesis ? window.speechSynthesis : null;
+const keep = [];
 let voice = null, unlocked = false, enabled = true, onDuck = null, speaking = 0;
 
 function pickVoice() {
@@ -36,9 +37,14 @@ export const voiceAPI = {
   get busy() { return speaking > 0; },
   say(text, { rate = 0.92, pitch = 1.35, onend } = {}) {
     if (!SS || !enabled) { onend && setTimeout(onend, 600); return; }
+    const busy = (() => { try { return SS.speaking || SS.pending; } catch (e) { return false; } })();
+    if (busy) { try { SS.cancel(); } catch (e) {} setTimeout(() => this._speak(text, rate, pitch, onend), 90); return; }
+    this._speak(text, rate, pitch, onend);
+  },
+  _speak(text, rate, pitch, onend) {
     try {
-      SS.cancel();
       const u = new SpeechSynthesisUtterance(text);
+      keep.push(u); if (keep.length > 4) keep.shift(); // Chrome GC bug: keep a reference so onend fires
       u.lang = voice ? voice.lang : 'zh-TW';
       if (voice) u.voice = voice;
       u.rate = rate; u.pitch = pitch; u.volume = 1;

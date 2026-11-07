@@ -1,6 +1,6 @@
 // Game logic + rendering. Everything is time-based in "frames" (dt = 1 at 60 fps) so 120 Hz screens stay silky.
 import { computeLayout } from './layout.js';
-import { ROSTER, BY_ID, OPENING, prepare, pixelSprite, isFailed, loadImage } from './poke.js';
+import { ROSTER, BY_ID, OPENING, prepare, pixelSprite, isFailed, loadImage, resetFailed } from './poke.js';
 import { FX, drawSpr, sprW, sprH } from './fx.js';
 import { drawText, measure } from './text.js';
 import { drawBackground, drawFrame, drawCard, drawSlotHint, drawButton, drawStarMeter, SPR } from './art.js';
@@ -52,8 +52,8 @@ export class Game {
     this.L = computeLayout(W, H);
     const L = this.L;
     // prepare sprite sizes for whatever is loaded
-    const ids = new Set([...this.titleMons.map((m) => m.id), ...this.cards.map((c) => c.id)]);
-    ids.forEach((id) => prepare(id, [L.Nb, L.Ns]));
+    const ids = new Set([...this.titleMons.map((m) => m.id), ...this.cards.map((c) => c.id), ...(this.next ? this.next.ids : [])]);
+    ids.forEach((id) => prepare(id, [L.Nb, L.Ns, L.Np]));
     this.cards.forEach((c, i) => {
       const s = L.cards[c.slot];
       c.hx = s.cx; c.hy = s.cy;
@@ -65,7 +65,7 @@ export class Game {
 
   async prepTitle() {
     const L = this.L;
-    await Promise.all(this.titleMons.map((m) => prepare(m.id, [L.Nb, L.Ns])));
+    await Promise.all(this.titleMons.map((m) => prepare(m.id, [L.Nb, L.Ns, L.Np])));
   }
 
   // ---------------------------------------------------------------- round setup
@@ -74,7 +74,9 @@ export class Game {
     if (n < OPENING.length) {
       for (let i = n; i < OPENING.length; i++) if (!isFailed(OPENING[i]) && !this.recent.includes(OPENING[i])) return OPENING[i];
     }
-    const pool = ROSTER.filter((p) => !isFailed(p.id) && !this.recent.slice(-6).includes(p.id));
+    let pool = ROSTER.filter((p) => !isFailed(p.id) && !this.recent.slice(-6).includes(p.id));
+    if (!pool.length) pool = ROSTER.filter((p) => !isFailed(p.id));
+    if (!pool.length) return null;
     let tot = 0; pool.forEach((p) => (tot += p.fav || 1));
     let r = Math.random() * tot;
     for (const p of pool) { r -= p.fav || 1; if (r <= 0) return p.id; }
@@ -95,16 +97,21 @@ export class Game {
       if (out.length && p.group && BY_ID[out[0]].group === p.group) continue;
       out.push(p.id);
     }
-    while (out.length < 2) { const p = ROSTER[(Math.random() * ROSTER.length) | 0]; if (p.id !== ans && !out.includes(p.id)) out.push(p.id); }
+    for (let k = 0; out.length < 2 && k < 400; k++) { const p = ROSTER[(Math.random() * ROSTER.length) | 0]; if (p.id !== ans && !out.includes(p.id) && !isFailed(p.id)) out.push(p.id); }
+    for (let k = 0; out.length < 2 && k < 400; k++) { const p = ROSTER[(Math.random() * ROSTER.length) | 0]; if (p.id !== ans && !out.includes(p.id)) out.push(p.id); }
     return out;
   }
   async prepareRound() {
+    try { return await this._prepareRound(); } catch (e) { return null; }
+  }
+  async _prepareRound() {
     const L = this.L;
     for (let attempt = 0; attempt < 6; attempt++) {
       const ans = this.chooseAnswer();
+      if (ans == null) return null;
       const ds = this.chooseDistractors(ans);
       const ids = [ans, ...ds];
-      const ok = await Promise.all(ids.map((id) => prepare(id, [L.Nb, L.Ns])));
+      const ok = await Promise.all(ids.map((id) => prepare(id, [this.L.Nb, this.L.Ns])));
       if (ok.every(Boolean)) {
         for (let i = ids.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [ids[i], ids[j]] = [ids[j], ids[i]]; }
         return { ans, ids };
@@ -116,7 +123,7 @@ export class Game {
   queueNext() {
     this.next = null;
     this.nextP = this.prepareRound().then((r) => {
-      if (!r) { return new Promise((res) => setTimeout(res, 2000)).then(() => { this.queueNext(); return this.nextP; }); }
+      if (!r) { return new Promise((res) => setTimeout(res, 2500)).then(() => { resetFailed(); this.queueNext(); return this.nextP; }); }
       this.next = r; return r;
     });
   }
@@ -146,23 +153,26 @@ export class Game {
     if (this.meter >= STARS) this.meter = 0;
     this.sfx('whoosh');
     setTimeout(() => this.sfx('question'), 180);
-    this.sayLater('我是誰？', 1250);
-    this.queueNext();
+    this.sayLater('我是誰？', 1250, () => !this.revealed);
+    this.next = null;
+    this.nextP = new Promise((res) => setTimeout(() => { this.queueNext(); this.nextP.then(res); }, 700));
   }
-  sayLater(text, ms) {
+  sayLater(text, ms, guard) {
     clearTimeout(this._sayTo);
-    this._sayTo = setTimeout(() => this.voice.say(text), ms);
+    this._sayTo = setTimeout(() => { if (!guard || guard()) this.voice.say(text); }, ms);
   }
 
   async begin() {
     if (this.started) return;
     this.started = true;
+    resetFailed();
     this.sfx('tap');
     try { this.audio.bgm('play'); } catch (e) {}
     this.scene = 'loading';
     this.loadT = 0;
     const r = await this.prepareRound();
     if (!r) { this.scene = 'offline'; this.started = false; return; }
+    await prepare(r.ans, [this.L.Nb, this.L.Ns]);
     this.titleOut = 0;
     this.startRound(r);
   }
@@ -171,7 +181,7 @@ export class Game {
   hitCard(x, y) {
     for (let i = this.cards.length - 1; i >= 0; i--) {
       const c = this.cards[i];
-      if (c.state !== 'idle' && c.state !== 'return') continue;
+      if (c.state !== 'idle' && c.state !== 'return' && !(c.state === 'enter' && c.enterT > 6)) continue;
       const L = this.L, pad = 8;
       if (Math.abs(x - c.x) <= L.cardW / 2 + pad && Math.abs(y - c.y) <= L.cardH / 2 + pad) return c;
     }
@@ -194,9 +204,23 @@ export class Game {
     const p = this.ptr;
     if (ev.t === 'down') {
       this.idle = 0;
-      if (this.inMute(ev.x, ev.y)) { this.muteBtnPress = 1; p.mute = true; return; }
+      // a second finger never steals a card that is being dragged; otherwise the newest touch wins
+      if (p.down && p.card && p.card.state === 'drag' && ev.id !== p.id) return;
+      if (p.down && p.card && p.card.state === 'drag') { p.card.state = 'return'; p.card = null; }
+      p.id = ev.id;
+      if (this.inMute(ev.x, ev.y)) { this.muteBtnPress = 1; p.mute = true; p.down = false; return; }
       p.down = true; p.x = p.sx = ev.x; p.y = p.sy = ev.y; p.st = this.t; p.moved = 0; p.card = null; p.mute = false;
       if (this.scene === 'title') { this.btnPress = 1; return; }
+      if (this.rev && this.scene === 'round' && this.rev.t > 30) {
+        const F = L.frame;
+        if (ev.x > F.x && ev.x < F.x + F.w && ev.y > F.y && ev.y < F.y + F.h && this.t - (this._repeatT || -99) > 50) {
+          this._repeatT = this.t;
+          this.silHopV = -4.4; this.sfx('twinkle');
+          this.fx.sparkles(ev.x, ev.y, 4, 14);
+          this.voice.say(BY_ID[this.ans].name);
+        }
+        return;
+      }
       if (this.scene === 'round' && !this.revealed) {
         const c = this.hitCard(ev.x, ev.y);
         if (c) {
@@ -212,12 +236,13 @@ export class Game {
       return;
     }
     if (ev.t === 'move') {
-      if (!p.down) return;
+      if (!p.down || (ev.id !== undefined && ev.id !== p.id)) return;
       p.moved = Math.max(p.moved, dist(ev.x, ev.y, p.sx, p.sy));
       p.x = ev.x; p.y = ev.y;
       return;
     }
     if (ev.t === 'up' || ev.t === 'cancel') {
+      if (ev.id !== undefined && p.id !== undefined && ev.id !== p.id) return;
       if (p.mute) { p.mute = false; this.muteBtnPress = 0; if (ev.t === 'up' && this.inMute(ev.x, ev.y)) this.toggleMute(); return; }
       const wasDown = p.down;
       p.down = false;
@@ -235,7 +260,7 @@ export class Game {
       const c = p.card;
       p.card = null;
       if (!c || c.state !== 'drag') return;
-      const tap = ev.t === 'up' && p.moved < 10 && this.t - p.st < 30;
+      const tap = ev.t === 'up' && p.moved < 10;
       if (tap) { c.state = 'idle'; this.tapCard(c); return; }
       this.release(c, ev.t === 'cancel');
     }
@@ -288,6 +313,7 @@ export class Game {
 
   flyToFrame(c, dur) {
     const F = this.L.frame;
+    clearTimeout(this._sayTo);
     c.state = 'fly';
     c.fly = { t: 0, dur, x0: c.x, y0: c.y, x1: F.cx, y1: F.cy };
     this.revealed = true; // lock input
@@ -421,6 +447,7 @@ export class Game {
     this.fx.ring(F.cx, F.cy, F.w * 0.62, '#fff6d8', 24);
     this.fx.starBurst(F.cx, F.cy, 14, 3.4);
     this.sfx('snap');
+    try { navigator.vibrate && navigator.vibrate(18); } catch (e) {}
     this.shake = 10;
     try { this.audio.magnet(null); } catch (e) {}
   }
@@ -457,6 +484,7 @@ export class Game {
         r.starFly.landed = true; this.meter++;
         this.sfx('twinkle');
         this.fx.starBurst(r.starFly.x1, r.starFly.y1, 6, 1.6);
+        if (this.meter >= STARS) for (let i = 0; i < STARS; i++) { this.fx.starBurst(this.meterSlotX(i), r.starFly.y1, 4, 1.4); this.fx.sparkles(this.meterSlotX(i), r.starFly.y1, 2, 6); }
       }
     }
     const minT = r.big ? 290 : 195;
@@ -471,8 +499,7 @@ export class Game {
 
   meterSlotX(i) {
     const L = this.L;
-    const mx = L.x0 + 8;
-    return mx + i * 16 + 6;
+    return L.x0 + 8 + i * 13 + 5.5;
   }
 
   outro() {
@@ -483,8 +510,7 @@ export class Game {
     const tick = () => {
       if (!this.next) { this.nextP.then(tick); return; }
       const nx = this.next; this.next = null;
-      this.round++;
-      this.startRound(nx);
+      Promise.all(nx.ids.map((id) => prepare(id, [this.L.Nb, this.L.Ns]))).then(() => { this.round++; this.startRound(nx); });
     };
     this._outTick = tick;
   }
@@ -541,12 +567,24 @@ export class Game {
     return sp;
   }
 
+  titleFrame() {
+    const L = this.L, F = L.frame;
+    const sc = L.CW >= 250 ? 3 : 2;
+    const need = 4 + 12 * sc + 4 + 12 + 14 + 44 + 10 + L.Np + 14;
+    const h = Math.min(F.h, L.H - F.y - need);
+    if (h >= F.h) return F;
+    const w = Math.min(F.w, Math.round(h / 0.92));
+    const x = L.x0 + Math.round((L.CW - w) / 2);
+    return { x, y: F.y, w, h, cx: x + w / 2, cy: F.y + h / 2 };
+  }
+
   drawTitle(ctx) {
-    const L = this.L, t = this.t, F = L.frame;
+    const L = this.L, t = this.t, F = this.titleFrame();
     drawFrame(ctx, F.x, F.y, F.w, F.h, t, 0);
     // big Pikachu silhouette, bobbing
     const bob = R(Math.sin(t / 26) * 2);
-    const ok = this.drawPokemon(ctx, 25, F.cx, F.cy + bob, L.Nb, L.bigK, 'sil');
+    const tk = F === L.frame ? L.bigK : Math.max(1, Math.min(L.bigK, Math.floor((F.h - 30) / L.Nb)));
+    const ok = F === L.frame || tk === L.bigK ? this.drawPokemon(ctx, 25, F.cx, F.cy + bob, L.Nb, tk, 'sil') : this.drawPokemon(ctx, 25, F.cx, F.cy + bob, L.Nb, (F.h - 34) / L.Nb, 'sil');
     if (!ok) this.drawSpinner(ctx, F.cx, F.cy);
     // question marks floating around
     for (let i = 0; i < 3; i++) {
@@ -568,24 +606,25 @@ export class Game {
     }
     drawText(ctx, '猜猜寶可夢', L.x0 + R(L.CW / 2), ty + 12 * sc + 4, { scale: 1, color: '#9fe0ff', align: 'center', outline: '#101a3c' });
     // parade of favourites (tap them!)
-    const mons = this.titleMons.filter((m) => pixelSprite(m.id, L.Ns));
+    const mons = this.titleMons.filter((m) => pixelSprite(m.id, L.Np));
     const n = mons.length;
     const by = L.cardsY + L.cardH - 6;
     const span = L.CW - 8;
     mons.forEach((m, i) => {
-      const sp = pixelSprite(m.id, L.Ns);
-      const k = Math.min(0.9, (span / n + 4) / L.Ns);
+      const sp = pixelSprite(m.id, L.Np);
       const cx = L.x0 + 4 + ((i + 0.5) / n) * span;
       const idleHop = Math.max(0, Math.sin(t / 14 + m.ph * 2)) * 2;
-      const w = R(sp.w * k), h = R(sp.h * k);
+      const w = sp.w, h = sp.h;
       const x = R(cx - w / 2), y = R(by - h - idleHop + m.hop);
-      ctx.drawImage(sp.img, x, y, w, h);
-      m.box = { x, y, w, h };
+      ctx.drawImage(sp.img, x, y);
+      const cw = span / n;
+      m.box = { x: R(cx - cw / 2) + 2, y: by - L.Np - 6, w: R(cw) - 4, h: L.Np + 6 };
     });
     // start button
     const bw = Math.min(156, L.CW - 60), bh = 44;
     const bx = L.x0 + R((L.CW - bw) / 2);
-    const by2 = R(lerp(ty + 12 * sc + 22, L.cardsY - bh - 18, 0.55));
+    const byMax = L.cardsY + L.cardH - 6 - L.Np - 10 - bh;
+    const by2 = R(Math.min(byMax, Math.max(ty + 12 * sc + 22, lerp(ty + 12 * sc + 22, L.cardsY - bh - 18, 0.55))));
     const pulse = this.scene === 'title' ? Math.sin(t / 12) : 0;
     if (this.scene === 'loading') {
       this.drawSpinner(ctx, L.x0 + L.CW / 2, by2 + bh / 2);
@@ -647,6 +686,21 @@ export class Game {
       }
     }
     ctx.restore();
+    // every 5th: big "太棒了！" stamp over the frame
+    if (r && r.big && r.t > 60) {
+      const k = clamp((r.t - 60) / 16, 0, 1), out = clamp((r.t - 230) / 20, 0, 1);
+      if (out < 1) {
+        const sc = L.CW >= 250 ? 4 : 3;
+        const y = F.y + R(F.h * 0.72) - R((1 - easeOutBack(k)) * 30) + R(out * 20);
+        const s2 = '太棒了！';
+        let x = R(F.cx - measure(s2, sc) / 2), i = 0;
+        for (const ch of s2) {
+          const yy = y + R(Math.sin(t / 7 - i) * 2);
+          drawText(ctx, ch, x, yy, { scale: sc, color: ['#ffd84a', '#ff7eb6', '#8ee86b', '#ffffff'][i % 4], outline: '#1b2a5c', shadow: '#101a3c', alpha: 1 - out });
+          x += measure(ch, sc); i++;
+        }
+      }
+    }
     // banner
     this.drawBanner(ctx);
     // cards (dragged one last = on top)
