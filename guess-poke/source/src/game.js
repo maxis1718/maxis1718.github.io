@@ -34,7 +34,11 @@ export class Game {
     this.round = 0; this.correct = 0; this.meter = 0;
     this.recent = this.loadJSON('recent', []);
     this.bag = this.loadJSON('bag', []);
-    this.total = parseInt(store.get('score') || '0', 10) || 0;
+    this.score = 0; // this game's score (resets every time she presses 開始)
+    this.best = parseInt(store.get('best') || '0', 10) || 0;
+    this.bestAtStart = this.best;
+    this.newRecord = false; this.record = null;
+    this.sess = 0; this.homeHold = 0;
     this.firstEver = !store.get('bag');
     this.gain = null;
     this.recentCards = [];
@@ -162,7 +166,9 @@ export class Game {
   }
   queueNext() {
     this.next = null;
+    const sess = this.sess;
     this.nextP = this._prepareRound(true).catch(() => null).then((r) => {
+      if (sess !== this.sess) return null;
       if (!r) { return new Promise((res) => setTimeout(res, 2500)).then(() => { resetFailed(); this.queueNext(); return this.nextP; }); }
       this.next = r; return r;
     });
@@ -205,7 +211,8 @@ export class Game {
     this.sfx('whoosh');
     setTimeout(() => this.sfx('question'), 180);
     this.next = null;
-    this.nextP = new Promise((res) => setTimeout(() => { this.queueNext(); this.nextP.then(res); }, 700));
+    const sess = this.sess;
+    this.nextP = new Promise((res) => setTimeout(() => { if (sess !== this.sess) return res(null); this.queueNext(); this.nextP.then(res); }, 700));
   }
   sayLater(text, ms, guard) {
     clearTimeout(this._sayTo);
@@ -215,7 +222,10 @@ export class Game {
   async begin() {
     if (this.started) return;
     this.started = true;
+    const sess = ++this.sess;
     resetFailed();
+    this.score = 0; this.newRecord = false; this.record = null; this.bestAtStart = this.best;
+    this.correct = 0; this.meter = 0; this.round = this.firstEver ? 0 : this.round; this.n = 3; this.levelUp = null;
     this.sfx('tap');
     try { this.audio.bgm(TRACKS[this.track]); } catch (e) {}
     this.scene = 'loading';
@@ -223,8 +233,26 @@ export class Game {
     const r = await this.prepareRound();
     if (!r) { this.scene = 'offline'; this.started = false; return; }
     { const Ln = this.layoutFor(r.n); await Promise.all(r.ids.map((id) => prepare(id, [Ln.Nb, Ln.Ns]))); }
+    if (sess !== this.sess) return;
     this.titleOut = 0;
     this.startRound(r);
+  }
+
+  goTitle() {
+    this.sess++;
+    this.started = false;
+    this.firstEver = false;
+    clearTimeout(this._sayTo);
+    try { this.voice.cancel(); } catch (e) {}
+    try { this.audio.magnet(null); this.audio.bgm('town'); } catch (e) {}
+    this.cards = []; this.rev = null; this.next = null; this.revealed = false; this.levelUp = null; this.record = null;
+    this.ptr.down = false; this.ptr.card = null; this.ptr.home = false; this.homeHold = 0;
+    this.fx.clear();
+    this.n = 3; this.L = computeLayout(this.W, this.H, 3);
+    this.scene = 'title';
+    this.titleT = 0;
+    this.sfx('tap');
+    if (this.newRecord) setTimeout(() => { this.sfx('levelup'); this.fx.confetti(this.L.W, 60); }, 300);
   }
 
   // ---------------------------------------------------------------- input
@@ -237,6 +265,7 @@ export class Game {
     }
     return null;
   }
+  inHome(x, y) { const m = this.L.home; return (this.scene === 'round' || this.scene === 'out') && x >= m.x - 4 && x <= m.x + m.w + 6 && y >= m.y - 4 && y <= m.y + m.h + 6; }
   inMute(x, y) { const m = this.L.mute; return x >= m.x - 6 && x <= m.x + m.w + 6 && y >= m.y - 4 && y <= m.y + m.h + 6; }
 
   handle(ev) {
@@ -259,6 +288,7 @@ export class Game {
       if (p.down && p.card && p.card.state === 'drag') { p.card.state = 'return'; p.card = null; }
       p.id = ev.id;
       if (this.inMute(ev.x, ev.y)) { this.muteBtnPress = 1; p.mute = true; p.down = false; return; }
+      if (this.inHome(ev.x, ev.y)) { p.home = true; p.down = false; this.homeHold = 0; return; }
       p.down = true; p.x = p.sx = ev.x; p.y = p.sy = ev.y; p.st = this.t; p.moved = 0; p.card = null; p.mute = false;
       if (this.scene === 'title') { this.btnPress = 1; return; }
       if (this.rev && this.scene === 'round' && this.rev.t > 30) {
@@ -293,6 +323,7 @@ export class Game {
     }
     if (ev.t === 'up' || ev.t === 'cancel') {
       if (ev.id !== undefined && p.id !== undefined && ev.id !== p.id) return;
+      if (p.home) { p.home = false; this.homeHold = 0; return; }
       if (p.mute) { p.mute = false; this.muteBtnPress = 0; if (ev.t === 'up' && this.inMute(ev.x, ev.y)) this.toggleMute(); return; }
       const wasDown = p.down;
       p.down = false;
@@ -385,6 +416,13 @@ export class Game {
     if (this.levelUp) { this.levelUp.t += dt; if (this.levelUp.t > 150) this.levelUp = null; }
     this.btnPressV = lerp(this.btnPressV || 0, this.btnPress, follow(0.4, dt));
     this.muteV = lerp(this.muteV || 0, this.muteBtnPress, follow(0.4, dt));
+    // home: hold ~1 s to go back to the title (so little fingers can't quit by accident)
+    if (this.ptr.home) { this.homeHold += dt; if (this.homeHold >= 55) { this.goTitle(); return; } }
+    if (this.record) {
+      const pt = this.record.t; this.record.t += dt;
+      if (((pt / 8) | 0) !== ((this.record.t / 8) | 0) && this.record.t < 120) this.fx.sparkles(this.L.mute.x - 50, this.L.top.y + 34, 2, 30);
+      if (this.record.t > 170) this.record = null;
+    }
 
     for (const m of this.titleMons) {
       m.hopV += 0.28 * dt; m.hop += m.hopV * dt;
@@ -537,7 +575,12 @@ export class Game {
       r.starFly.t += dt;
       if (r.starFly.t >= 28 && !r.starFly.landed) {
         r.starFly.landed = true; this.meter++;
-        this.total += this.gain ? this.gain.pts : 20; this.scoreBump = 1; this.store.set('score', String(this.total));
+        this.score += this.gain ? this.gain.pts : 20; this.scoreBump = 1;
+        if (this.score > this.best) {
+          if (!this.newRecord && this.bestAtStart > 0) { this.record = { t: 0 }; setTimeout(() => this.sfx('levelup'), 260); this.fx.confetti(L.W, 50); }
+          this.newRecord = true;
+          this.best = this.score; this.store.set('best', String(this.best));
+        }
         setTimeout(() => this.sfx('score'), 120);
         this.sfx('twinkle');
         this.fx.starBurst(r.starFly.x1, r.starFly.y1, 6, 1.6);
@@ -556,7 +599,7 @@ export class Game {
 
   meterSlotX(i) {
     const L = this.L;
-    return L.x0 + 8 + i * 13 + 5.5;
+    return L.x0 + 36 + i * 13 + 5.5;
   }
 
   outro() {
@@ -564,11 +607,13 @@ export class Game {
     this.cards.forEach((c) => { c.state = 'out'; c.outT = 0; c.y0 = c.y; });
     this.scene = 'out';
     this.outT = 0;
+    const sess = this.sess;
     const tick = () => {
+      if (sess !== this.sess) return;
       if (!this.next) { this.nextP.then(tick); return; }
       const nx = this.next; this.next = null;
       const Ln = this.layoutFor(nx.n);
-      Promise.all(nx.ids.map((id) => prepare(id, [Ln.Nb, Ln.Ns]))).then(() => { this.round++; this.startRound(nx); });
+      Promise.all(nx.ids.map((id) => prepare(id, [Ln.Nb, Ln.Ns]))).then(() => { if (sess !== this.sess) return; this.round++; this.startRound(nx); });
     };
     this._outTick = tick;
   }
@@ -602,21 +647,60 @@ export class Game {
     }
     this.drawScore(ctx);
     this.drawMute(ctx);
+    if (this.scene === 'round' || this.scene === 'out') this.drawHome(ctx);
+  }
+
+  drawHome(ctx) {
+    const m = this.L.home;
+    const held = this.ptr.home ? 1 : 0;
+    ctx.fillStyle = 'rgba(16,26,60,0.55)';
+    ctx.fillRect(m.x + 2, m.y + 2, m.w - 4, m.h - 4); ctx.fillRect(m.x + 3, m.y + 1, m.w - 6, m.h - 2); ctx.fillRect(m.x + 1, m.y + 3, m.w - 2, m.h - 6);
+    // pixel house
+    const cx = m.x + 13, cy = m.y + 13;
+    ctx.fillStyle = held ? '#ffd84a' : '#e0f2ff';
+    for (let i = 0; i < 6; i++) ctx.fillRect(cx - i - 1, cy - 7 + i, (i + 1) * 2, 1);
+    ctx.fillRect(cx - 5, cy - 1, 10, 7);
+    ctx.fillStyle = '#1b2a5c'; ctx.fillRect(cx - 1, cy + 2, 3, 4);
+    if (this.homeHold > 0) {
+      const k = clamp(this.homeHold / 55, 0, 1);
+      ctx.fillStyle = '#101a3c'; ctx.fillRect(m.x + 1, m.y + m.h + 1, m.w - 2, 4);
+      ctx.fillStyle = '#ffd84a'; ctx.fillRect(m.x + 2, m.y + m.h + 2, R((m.w - 4) * k), 2);
+    }
   }
 
   // top-right: 寶可夢大師之路 + running total (persisted)
   drawScore(ctx) {
     const L = this.L, m = L.mute;
-    const num = String(this.total);
-    const b = this.scoreBump;
+    const onTitle = !(this.scene === 'round' || this.scene === 'out');
+    const num = String(onTitle ? this.best : this.score);
+    const b = onTitle ? 0 : this.scoreBump;
     const sc = 2;
     const right = m.x - 6;
     const nw = measure(num, sc);
     const ny = L.top.y - 2 - R(Math.sin(b * Math.PI) * 4);
     drawText(ctx, num, right - nw, ny, { scale: sc, color: b > 0.05 ? '#ffffff' : '#ffd84a', outline: '#1b2a5c', shadow: '#101a3c' });
-    const label = '寶可夢大師之路';
+    let label = onTitle ? '最高分' : '寶可夢大師之路';
+    const leftLimit = L.x0 + 36 + STARS * 13 + 6;
+    if (!onTitle && right - nw - 4 - measure(label, 1) < leftLimit) label = '大師之路';
     const lw = measure(label, 1);
     drawText(ctx, label, right - nw - 4 - lw, L.top.y + 6, { scale: 1, color: '#9fe0ff', outline: '#101a3c' });
+    // "新紀錄！" under the score: on the title after a record game, and while beating it in play
+    const showNew = this.newRecord && (onTitle || this.bestAtStart > 0);
+    if (showNew && !this.record && ((this.t / 20) | 0) % 4 !== 3) {
+      drawText(ctx, '新紀錄！', right, L.top.y + 24, { scale: 1, color: '#ffd84a', align: 'right', outline: '#1b2a5c' });
+    }
+    // record broken: big stamp under the top bar
+    if (this.record && !onTitle) {
+      const k = clamp(this.record.t / 14, 0, 1), out = clamp((this.record.t - 140) / 30, 0, 1);
+      const s4 = '破紀錄！';
+      const sc4 = 2;
+      const yy = L.top.y + 22 + R((1 - easeOutBack(k)) * -14) - R(out * 8);
+      let x = R(right - measure(s4, sc4)), i = 0;
+      for (const ch of s4) {
+        drawText(ctx, ch, x, yy + R(Math.sin(this.t / 6 - i) * 2), { scale: sc4, color: ['#ffd84a', '#ff7eb6', '#ffffff', '#8ee86b'][i % 4], outline: '#1b2a5c', shadow: '#101a3c', alpha: 1 - out });
+        x += measure(ch, sc4); i++;
+      }
+    }
     if (b > 0.05) {
       drawText(ctx, '+' + (this.gain ? this.gain.pts : 20), right - nw / 2, ny + 22 - R((1 - b) * 10), { scale: 1, color: '#ffd84a', align: 'center', outline: '#1b2a5c', alpha: Math.min(1, b * 2) });
     }
@@ -728,7 +812,7 @@ export class Game {
   drawPlay(ctx) {
     const L = this.L, t = this.t, F = L.frame;
     // top bar: star meter
-    drawStarMeter(ctx, L.x0 + 8, L.top.y, this.meter, STARS, t);
+    drawStarMeter(ctx, L.x0 + 36, L.top.y, this.meter, STARS, t);
     // frame (+ shake on snap)
     const sx = this.shake ? R(Math.sin(this.shake * 2.2) * this.shake * 0.35) : 0;
     ctx.save(); ctx.translate(sx, 0);

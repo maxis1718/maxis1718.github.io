@@ -49,6 +49,7 @@ export function computeLayout(W, H, n = 3) {
     banner: { y: bannerY, h: bannerH, cx: x0 + CW / 2 },
     top: { y: 6, h: 22 },
     mute: { x: x0 + CW - 30, y: 4, w: 26, h: 26 },
+    home: { x: x0 + 4, y: 4, w: 26, h: 26 },
     bigK, Nb, Ns, Np,
   };
 }

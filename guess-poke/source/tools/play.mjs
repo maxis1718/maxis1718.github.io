@@ -112,6 +112,36 @@ if (scenario === 'long') {
   console.log('rounds', seen.length, 'answers', seen.join(','), 'stats', JSON.stringify(I.stats), 'meter', I.meter);
 }
 
+if (scenario === 'record') {
+  const solve = async (fast) => {
+    let I = await waitScene('round', 1500);
+    if (!fast) await step(400);
+    const c = I.cards.find((c) => c.id === I.ans);
+    await ev({ t: 'down', x: c.x, y: c.y }); await step(2); await ev({ t: 'up', x: c.x, y: c.y }); await step(5);
+  };
+  const home = async () => {
+    const h = await page.evaluate(() => window.__gp.game.L.home);
+    await ev({ t: 'down', x: h.x + 10, y: h.y + 10 }); await step(30); await shot('rec_home_holding'); await step(40);
+    await ev({ t: 'up', x: h.x + 10, y: h.y + 10 }); await step(30);
+  };
+  await ev({ t: 'down', x: 10, y: 10 }); await ev({ t: 'up', x: 10, y: 10 });
+  for (let i = 0; i < 3; i++) await solve(false);
+  await step(200);
+  await home();
+  console.log('after game1', await page.evaluate(() => { const g = window.__gp.game; return { scene: g.scene, score: g.score, best: g.best, nr: g.newRecord }; }));
+  await shot('rec_title1');
+  await ev({ t: 'down', x: 10, y: 10 }); await ev({ t: 'up', x: 10, y: 10 });
+  for (let i = 0; i < 4; i++) {
+    await solve(true);
+    const st = await page.evaluate(() => { const g = window.__gp.game; return { score: g.score, best: g.best, rec: !!g.record }; });
+    console.log('g2 round', i, JSON.stringify(st));
+    if (st.rec) { await step(25); await shot('rec_stamp'); }
+  }
+  for (let k = 0; k < 400; k++) { const r = await page.evaluate(() => !!window.__gp.game.record && window.__gp.game.record.t > 20); if (r) { await shot('rec_stamp'); break; } await step(2); }
+  await step(200); await home(); await shot('rec_title2');
+  console.log('final', await page.evaluate(() => { const g = window.__gp.game; return { scene: g.scene, score: g.score, best: g.best, nr: g.newRecord, ls: localStorage.getItem('guesspoke.best') }; }));
+}
+
 if (scenario === 'drag') {
   // real-time, real touch events through CDP (not the queue) to validate pointer plumbing
   await page.evaluate(() => window.__gp.manual(false));
