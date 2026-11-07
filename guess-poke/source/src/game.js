@@ -159,7 +159,6 @@ export class Game {
     if (this.meter >= STARS) this.meter = 0;
     this.sfx('whoosh');
     setTimeout(() => this.sfx('question'), 180);
-    this.sayLater('我是誰？', 1250, () => !this.revealed);
     this.next = null;
     this.nextP = new Promise((res) => setTimeout(() => { this.queueNext(); this.nextP.then(res); }, 700));
   }
