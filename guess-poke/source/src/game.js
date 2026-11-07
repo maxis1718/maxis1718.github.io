@@ -102,16 +102,22 @@ export class Game {
     return out;
   }
   async prepareRound() {
-    try { return await this._prepareRound(); } catch (e) { return null; }
+    try { return await this._prepareRound(false); } catch (e) { return null; }
   }
-  async _prepareRound() {
+  async _prepareRound(waitSnap) {
     const L = this.L;
     for (let attempt = 0; attempt < 6; attempt++) {
       const ans = this.chooseAnswer();
       if (ans == null) return null;
       const ds = this.chooseDistractors(ans);
       const ids = [ans, ...ds];
-      const ok = await Promise.all(ids.map((id) => prepare(id, [this.L.Nb, this.L.Ns])));
+      // download now, but build the pixel sprites only after the snap (no hitch while she is dragging),
+      // one per tick so even slow phones never drop a frame for long
+      const ok = (await Promise.all(ids.map((id) => loadImage(id)))).map(Boolean);
+      if (ok.every(Boolean)) {
+        if (waitSnap) await new Promise((res) => { const chk = () => (this.rev || this.scene !== 'round' ? res() : setTimeout(chk, 100)); chk(); });
+        for (const id of ids) { await new Promise((res) => setTimeout(res, 16)); await prepare(id, [this.L.Nb, this.L.Ns]); }
+      }
       if (ok.every(Boolean)) {
         for (let i = ids.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [ids[i], ids[j]] = [ids[j], ids[i]]; }
         return { ans, ids };
@@ -122,7 +128,7 @@ export class Game {
   }
   queueNext() {
     this.next = null;
-    this.nextP = this.prepareRound().then((r) => {
+    this.nextP = this._prepareRound(true).catch(() => null).then((r) => {
       if (!r) { return new Promise((res) => setTimeout(res, 2500)).then(() => { resetFailed(); this.queueNext(); return this.nextP; }); }
       this.next = r; return r;
     });
@@ -205,7 +211,7 @@ export class Game {
     if (ev.t === 'down') {
       this.idle = 0;
       // a second finger never steals a card that is being dragged; otherwise the newest touch wins
-      if (p.down && p.card && p.card.state === 'drag' && ev.id !== p.id) return;
+      if (p.down && p.card && p.card.state === 'drag' && ev.id !== p.id && !(p.moved < 10 && this.t - p.st > 18)) return;
       if (p.down && p.card && p.card.state === 'drag') { p.card.state = 'return'; p.card = null; }
       p.id = ev.id;
       if (this.inMute(ev.x, ev.y)) { this.muteBtnPress = 1; p.mute = true; p.down = false; return; }
@@ -570,7 +576,7 @@ export class Game {
   titleFrame() {
     const L = this.L, F = L.frame;
     const sc = L.CW >= 250 ? 3 : 2;
-    const need = 4 + 12 * sc + 4 + 12 + 14 + 44 + 10 + L.Np + 14;
+    const need = 4 + 12 * sc + 4 + 12 + 16 + 44 + 18 + L.Np + 14;
     const h = Math.min(F.h, L.H - F.y - need);
     if (h >= F.h) return F;
     const w = Math.min(F.w, Math.round(h / 0.92));
@@ -623,7 +629,7 @@ export class Game {
     // start button
     const bw = Math.min(156, L.CW - 60), bh = 44;
     const bx = L.x0 + R((L.CW - bw) / 2);
-    const byMax = L.cardsY + L.cardH - 6 - L.Np - 10 - bh;
+    const byMax = L.cardsY + L.cardH - 6 - L.Np - 18 - bh;
     const by2 = R(Math.min(byMax, Math.max(ty + 12 * sc + 22, lerp(ty + 12 * sc + 22, L.cardsY - bh - 18, 0.55))));
     const pulse = this.scene === 'title' ? Math.sin(t / 12) : 0;
     if (this.scene === 'loading') {
@@ -691,7 +697,7 @@ export class Game {
       const k = clamp((r.t - 60) / 16, 0, 1), out = clamp((r.t - 230) / 20, 0, 1);
       if (out < 1) {
         const sc = L.CW >= 250 ? 4 : 3;
-        const y = F.y + R(F.h * 0.72) - R((1 - easeOutBack(k)) * 30) + R(out * 20);
+        const y = F.y + 12 - R((1 - easeOutBack(k)) * 24) - R(out * 16);
         const s2 = '太棒了！';
         let x = R(F.cx - measure(s2, sc) / 2), i = 0;
         for (const ch of s2) {
