@@ -15,6 +15,14 @@ const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 const R = Math.round;
 
 const STARS = 5;
+const TRACKS = ['route', 'town', 'center'];
+// difficulty: 3 cards, then 4 after 5 correct, then 5 after 10 correct (per play session)
+// speed scoring: the faster she finds it, the more points (seconds -> points, label)
+const SPEED = [[2.5, 100, '閃電！'], [4, 80, '超快！'], [6, 60, '好快！'], [10, 40, '答對了！'], [1e9, 20, '答對了！']];
+const speedOf = (sec) => SPEED.find((s) => sec <= s[0]);
+const HINT_BOUNCE = 600, HINT_HAND = 1080, HINT_FIRST = 300; // frames of no touching (10 s / 18 s / first-ever round 5 s)
+const cardsFor = (correct) => (correct >= 10 ? 5 : correct >= 5 ? 4 : 3);
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 export class Game {
   constructor({ audio, voice, store }) {
@@ -24,7 +32,16 @@ export class Game {
     this.t = 0;
     this.scene = 'title';
     this.round = 0; this.correct = 0; this.meter = 0;
-    this.recent = [];
+    this.recent = this.loadJSON('recent', []);
+    this.bag = this.loadJSON('bag', []);
+    this.total = parseInt(store.get('score') || '0', 10) || 0;
+    this.firstEver = !store.get('bag');
+    this.gain = null;
+    this.recentCards = [];
+    this.n = 3;
+    this.track = 0;
+    this.scoreBump = 0;
+    this.levelUp = null;
     this.cards = [];
     this.ans = null;
     this.next = null; // prepared next round {ans, ids}
@@ -46,14 +63,18 @@ export class Game {
   }
 
   sfx(n, o) { try { this.audio.sfx(n, o); } catch (e) {} }
+  loadJSON(k, d) { try { const v = JSON.parse(this.store.get(k)); return Array.isArray(v) ? v : d; } catch (e) { return d; } }
+  layoutFor(n) { return computeLayout(this.W, this.H, n); }
 
   resize(W, H) {
     const old = this.L;
-    this.L = computeLayout(W, H);
+    this.W = W; this.H = H;
+    this.L = computeLayout(W, H, this.n);
     const L = this.L;
     // prepare sprite sizes for whatever is loaded
-    const ids = new Set([...this.titleMons.map((m) => m.id), ...this.cards.map((c) => c.id), ...(this.next ? this.next.ids : [])]);
+    const ids = new Set([...this.titleMons.map((m) => m.id), ...this.cards.map((c) => c.id)]);
     ids.forEach((id) => prepare(id, [L.Nb, L.Ns, L.Np]));
+    if (this.next) { const Ln = this.layoutFor(this.next.n); this.next.ids.forEach((id) => prepare(id, [Ln.Nb, Ln.Ns])); }
     this.cards.forEach((c, i) => {
       const s = L.cards[c.slot];
       c.hx = s.cx; c.hy = s.cy;
@@ -70,57 +91,70 @@ export class Game {
 
   // ---------------------------------------------------------------- round setup
   chooseAnswer() {
-    const n = this.round;
-    if (n < OPENING.length) {
-      for (let i = n; i < OPENING.length; i++) if (!isFailed(OPENING[i]) && !this.recent.includes(OPENING[i])) return OPENING[i];
+    // very first time ever: her favourites first
+    if (this.firstEver && this.round < OPENING.length) {
+      for (const id of OPENING) if (!isFailed(id) && !this.recent.includes(id) && id !== this.ans) { this.bag = this.bag.filter((x) => x !== id); this.saveBag(); return id; }
     }
-    let pool = ROSTER.filter((p) => !isFailed(p.id) && !this.recent.slice(-6).includes(p.id));
-    if (!pool.length) pool = ROSTER.filter((p) => !isFailed(p.id));
-    if (!pool.length) return null;
-    let tot = 0; pool.forEach((p) => (tot += p.fav || 1));
-    let r = Math.random() * tot;
-    for (const p of pool) { r -= p.fav || 1; if (r <= 0) return p.id; }
-    return pool[0].id;
+    // shuffle bag: every Pokémon once before any repeats (persisted across visits)
+    const valid = new Set(ROSTER.map((p) => p.id));
+    this.bag = this.bag.filter((id) => valid.has(id) && !isFailed(id));
+    if (!this.bag.length) {
+      const avoid = new Set(this.recent.slice(-8));
+      const fresh = shuffle(ROSTER.map((p) => p.id).filter((id) => !isFailed(id)));
+      // keep the last few answers out of the start of the new bag
+      this.bag = [...fresh.filter((id) => !avoid.has(id)), ...fresh.filter((id) => avoid.has(id))];
+    }
+    if (!this.bag.length) return null;
+    let i = this.bag.findIndex((id) => !this.recent.slice(-6).includes(id) && id !== this.ans);
+    if (i < 0) i = 0;
+    const id = this.bag.splice(i, 1)[0];
+    this.saveBag();
+    return id;
   }
-  chooseDistractors(ans) {
+  saveBag() { this.store.set('bag', JSON.stringify(this.bag)); }
+  chooseDistractors(ans, k = 2, stage = 1) {
     const a = BY_ID[ans];
-    const easy = this.round < 14;
+    const easy = stage < 3;
     const out = [];
-    for (let tries = 0; tries < 400 && out.length < 2; tries++) {
+    const recentC = new Set(this.recentCards);
+    for (let tries = 0; tries < 900 && out.length < k; tries++) {
       // favourites are fun distractors too (she knows them) — weight them up
       const p = ROSTER[(Math.random() * ROSTER.length) | 0];
       if (p.id === ans || isFailed(p.id) || out.includes(p.id)) continue;
-      if (Math.random() > (p.fav ? 0.9 : 0.45)) continue;
+      if (tries < 600 && recentC.has(p.id)) continue; // don't show the same faces round after round
+      if (Math.random() > (p.fav ? 0.9 : 0.5)) continue;
       if (a.group && p.group === a.group) continue;
       if (easy && p.color === a.color) continue;
-      if (out.length && easy && BY_ID[out[0]].color === p.color) continue;
-      if (out.length && p.group && BY_ID[out[0]].group === p.group) continue;
+      if (easy && out.some((o) => BY_ID[o].color === p.color)) continue;
+      if (p.group && out.some((o) => BY_ID[o].group === p.group)) continue;
       out.push(p.id);
     }
-    for (let k = 0; out.length < 2 && k < 400; k++) { const p = ROSTER[(Math.random() * ROSTER.length) | 0]; if (p.id !== ans && !out.includes(p.id) && !isFailed(p.id)) out.push(p.id); }
-    for (let k = 0; out.length < 2 && k < 400; k++) { const p = ROSTER[(Math.random() * ROSTER.length) | 0]; if (p.id !== ans && !out.includes(p.id)) out.push(p.id); }
+    for (let j = 0; out.length < k && j < 400; j++) { const p = ROSTER[(Math.random() * ROSTER.length) | 0]; if (p.id !== ans && !out.includes(p.id) && !isFailed(p.id)) out.push(p.id); }
+    for (let j = 0; out.length < k && j < 400; j++) { const p = ROSTER[(Math.random() * ROSTER.length) | 0]; if (p.id !== ans && !out.includes(p.id)) out.push(p.id); }
     return out;
   }
   async prepareRound() {
     try { return await this._prepareRound(false); } catch (e) { return null; }
   }
   async _prepareRound(waitSnap) {
-    const L = this.L;
+    // this round is played after the current one is solved, so it uses correct+1 when queued mid-round
+    const n = cardsFor(this.correct + (waitSnap && !this.rev ? 1 : 0));
+    const stage = n - 2;
     for (let attempt = 0; attempt < 6; attempt++) {
       const ans = this.chooseAnswer();
       if (ans == null) return null;
-      const ds = this.chooseDistractors(ans);
+      const ds = this.chooseDistractors(ans, n - 1, stage);
       const ids = [ans, ...ds];
       // download now, but build the pixel sprites only after the snap (no hitch while she is dragging),
       // one per tick so even slow phones never drop a frame for long
       const ok = (await Promise.all(ids.map((id) => loadImage(id)))).map(Boolean);
       if (ok.every(Boolean)) {
         if (waitSnap) await new Promise((res) => { const chk = () => (this.rev || this.scene !== 'round' ? res() : setTimeout(chk, 100)); chk(); });
-        for (const id of ids) { await new Promise((res) => setTimeout(res, 16)); await prepare(id, [this.L.Nb, this.L.Ns]); }
+        for (const id of ids) { await new Promise((res) => setTimeout(res, 16)); const Ln = this.layoutFor(n); await prepare(id, [Ln.Nb, Ln.Ns]); }
       }
       if (ok.every(Boolean)) {
         for (let i = ids.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [ids[i], ids[j]] = [ids[j], ids[i]]; }
-        return { ans, ids };
+        return { ans, ids, n };
       }
       if (!ok[0]) this.recent.push(ans); // skip broken answer next time
     }
@@ -135,9 +169,16 @@ export class Game {
   }
 
   startRound(r) {
+    const up = r.n > this.n && this.started && this.round > 0;
+    if (r.n !== this.n || !this.L || this.L.n !== r.n) { this.n = r.n; this.L = computeLayout(this.W, this.H, r.n); }
     const L = this.L;
     this.ans = r.ans;
     this.recent.push(r.ans); if (this.recent.length > 12) this.recent.shift();
+    this.store.set('recent', JSON.stringify(this.recent));
+    this.recentCards = [...r.ids, ...this.recentCards].slice(0, 10);
+    this.levelUp = up ? { t: 0 } : null;
+    this.readyT = null; this.gain = null;
+    if (up) { setTimeout(() => this.sfx('levelup'), 350); this.fx.confetti(L.W, 70); }
     this.cards = r.ids.map((id, i) => {
       const s = L.cards[i];
       return { id, slot: i, hx: s.cx, hy: s.cy, x: s.cx, y: s.cy + L.H * 0.5, vx: 0, vy: 0, state: 'enter', enterT: -i * 5,
@@ -156,7 +197,11 @@ export class Game {
     this.excite = 0;
     this.bannerT = 0;
     this.stats.rounds++;
-    if (this.meter >= STARS) this.meter = 0;
+    if (this.meter >= STARS) {
+      this.meter = 0;
+      this.track = (this.track + 1) % TRACKS.length;
+      try { this.audio.bgm(TRACKS[this.track]); } catch (e) {}
+    }
     this.sfx('whoosh');
     setTimeout(() => this.sfx('question'), 180);
     this.next = null;
@@ -172,12 +217,12 @@ export class Game {
     this.started = true;
     resetFailed();
     this.sfx('tap');
-    try { this.audio.bgm('play'); } catch (e) {}
+    try { this.audio.bgm(TRACKS[this.track]); } catch (e) {}
     this.scene = 'loading';
     this.loadT = 0;
     const r = await this.prepareRound();
     if (!r) { this.scene = 'offline'; this.started = false; return; }
-    await prepare(r.ans, [this.L.Nb, this.L.Ns]);
+    { const Ln = this.layoutFor(r.n); await Promise.all(r.ids.map((id) => prepare(id, [Ln.Nb, Ln.Ns]))); }
     this.titleOut = 0;
     this.startRound(r);
   }
@@ -200,7 +245,7 @@ export class Game {
     if (ev.t === 'key') {
       if (this.scene === 'title' && (ev.key === 'Enter' || ev.key === ' ')) this.begin();
       if (ev.key === 'm' || ev.key === 'M') this.toggleMute();
-      if (this.scene === 'round' && !this.revealed && /^[123]$/.test(ev.key)) {
+      if (this.scene === 'round' && !this.revealed && /^[1-5]$/.test(ev.key)) {
         const c = this.cards.find((c) => c.slot === +ev.key - 1);
         if (c && (c.state === 'idle' || c.state === 'return')) this.tapCard(c);
       }
@@ -313,12 +358,15 @@ export class Game {
     this.sfx('nope');
     if (!this.voice.busy) this.sayLater('不是我喔～', 420);
     // after a miss, show the hint sooner
-    this.idle = Math.max(this.idle, this.round === 0 ? 60 : 200);
+    this.idle = Math.max(this.idle, (this.firstEver && this.round === 0 ? HINT_FIRST : HINT_BOUNCE) - 240);
   }
 
   flyToFrame(c, dur) {
     const F = this.L.frame;
     clearTimeout(this._sayTo);
+    const sec = Math.max(0, (this.rt - (this.readyT == null ? this.rt : this.readyT)) / 60);
+    const sp = speedOf(sec);
+    this.gain = { pts: Math.round(sp[1] * (1 + 0.5 * (this.n - 3))), label: sp[2], sec, fast: sp[1] >= 80 };
     c.state = 'fly';
     c.fly = { t: 0, dur, x0: c.x, y0: c.y, x1: F.cx, y1: F.cy };
     this.revealed = true; // lock input
@@ -333,6 +381,8 @@ export class Game {
     const L = this.L;
     if (!L) return;
     this.fx.update(dt);
+    this.scoreBump = Math.max(0, this.scoreBump - dt / 24);
+    if (this.levelUp) { this.levelUp.t += dt; if (this.levelUp.t > 150) this.levelUp = null; }
     this.btnPressV = lerp(this.btnPressV || 0, this.btnPress, follow(0.4, dt));
     this.muteV = lerp(this.muteV || 0, this.muteBtnPress, follow(0.4, dt));
 
@@ -363,7 +413,7 @@ export class Game {
         c.enterT += dt;
         const k = clamp(c.enterT / 22, 0, 1);
         c.x = c.hx; c.y = lerp(c.hy + L.H * 0.5, c.hy, easeOutBack(k));
-        if (k >= 1) { c.state = 'idle'; c.y = c.hy; }
+        if (k >= 1) { c.state = 'idle'; c.y = c.hy; if (this.readyT == null && !this.cards.some((o) => o.state === 'enter')) this.readyT = this.rt; }
       } else if (c.state === 'drag') {
         c.grabT += dt;
         // card floats a bit above the finger so the finger doesn't hide it
@@ -416,7 +466,7 @@ export class Game {
       const lifted = c.state === 'drag' || c.state === 'fly';
       c.lift = lerp(c.lift, lifted ? 1 : 0, follow(0.3, dt));
       const hov = c.state === 'idle' && this.hover.x >= 0 && Math.abs(this.hover.x - c.x) < L.cardW / 2 && Math.abs(this.hover.y - c.y) < L.cardH / 2;
-      const hint = !this.revealed && c.id === this.ans && this.idle > 360;
+      const hint = !this.revealed && c.id === this.ans && this.idle > (this.firstEver && this.round === 0 ? HINT_FIRST : HINT_BOUNCE);
       c.hl = lerp(c.hl, hov || (hint && Math.sin(this.t * 0.12) > 0) ? 1 : 0, follow(0.2, dt));
     }
     this.cards = this.cards.filter((c) => c.state !== 'gone');
@@ -428,7 +478,7 @@ export class Game {
 
     // idle hints
     if (!this.revealed) {
-      const first = this.round === 0 ? 150 : 360;
+      const first = this.firstEver && this.round === 0 ? HINT_FIRST : HINT_BOUNCE;
       if (this.idle > first) {
         const ph = (this.idle - first) % 120;
         if (ph < dt) {
@@ -487,6 +537,8 @@ export class Game {
       r.starFly.t += dt;
       if (r.starFly.t >= 28 && !r.starFly.landed) {
         r.starFly.landed = true; this.meter++;
+        this.total += this.gain ? this.gain.pts : 20; this.scoreBump = 1; this.store.set('score', String(this.total));
+        setTimeout(() => this.sfx('score'), 120);
         this.sfx('twinkle');
         this.fx.starBurst(r.starFly.x1, r.starFly.y1, 6, 1.6);
         if (this.meter >= STARS) for (let i = 0; i < STARS; i++) { this.fx.starBurst(this.meterSlotX(i), r.starFly.y1, 4, 1.4); this.fx.sparkles(this.meterSlotX(i), r.starFly.y1, 2, 6); }
@@ -515,7 +567,8 @@ export class Game {
     const tick = () => {
       if (!this.next) { this.nextP.then(tick); return; }
       const nx = this.next; this.next = null;
-      Promise.all(nx.ids.map((id) => prepare(id, [this.L.Nb, this.L.Ns]))).then(() => { this.round++; this.startRound(nx); });
+      const Ln = this.layoutFor(nx.n);
+      Promise.all(nx.ids.map((id) => prepare(id, [Ln.Nb, Ln.Ns]))).then(() => { this.round++; this.startRound(nx); });
     };
     this._outTick = tick;
   }
@@ -547,7 +600,26 @@ export class Game {
       drawSpr(ctx, sp, -sprW(sp) / 2, -sprH(sp) / 2, (t / 5) | 0);
       ctx.restore();
     }
+    this.drawScore(ctx);
     this.drawMute(ctx);
+  }
+
+  // top-right: 寶可夢大師之路 + running total (persisted)
+  drawScore(ctx) {
+    const L = this.L, m = L.mute;
+    const num = String(this.total);
+    const b = this.scoreBump;
+    const sc = 2;
+    const right = m.x - 6;
+    const nw = measure(num, sc);
+    const ny = L.top.y - 2 - R(Math.sin(b * Math.PI) * 4);
+    drawText(ctx, num, right - nw, ny, { scale: sc, color: b > 0.05 ? '#ffffff' : '#ffd84a', outline: '#1b2a5c', shadow: '#101a3c' });
+    const label = '寶可夢大師之路';
+    const lw = measure(label, 1);
+    drawText(ctx, label, right - nw - 4 - lw, L.top.y + 6, { scale: 1, color: '#9fe0ff', outline: '#101a3c' });
+    if (b > 0.05) {
+      drawText(ctx, '+' + (this.gain ? this.gain.pts : 20), right - nw / 2, ny + 22 - R((1 - b) * 10), { scale: 1, color: '#ffd84a', align: 'center', outline: '#1b2a5c', alpha: Math.min(1, b * 2) });
+    }
   }
 
   drawMute(ctx) {
@@ -691,6 +763,27 @@ export class Game {
       }
     }
     ctx.restore();
+    // speed praise popup: "閃電！ +100"
+    if (r && this.gain && r.t < 95) {
+      const g = this.gain, k = clamp(r.t / 12, 0, 1), out = clamp((r.t - 70) / 25, 0, 1);
+      const sc = 2;
+      const y = F.y + 14 - R((1 - easeOutBack(k)) * 12) - R(out * 10);
+      const txt = g.label + ' +' + g.pts;
+      drawText(ctx, txt, R(F.cx), y, { scale: sc, color: g.fast ? '#ffd84a' : '#ffffff', align: 'center', outline: '#1b2a5c', shadow: '#101a3c', alpha: 1 - out });
+      if (g.fast && ((r.t / 6) | 0) % 2 === 0 && r.t < 60) this.fx.sparkles(F.cx + (Math.random() - 0.5) * 80, y + 10, 1, 4);
+    }
+    // difficulty went up: "挑戰升級！" stamp
+    if (this.levelUp && this.scene === 'round' && !r) {
+      const lt = this.levelUp.t, k = clamp(lt / 16, 0, 1), out = clamp((lt - 120) / 24, 0, 1);
+      const sc = L.CW >= 250 ? 3 : 2;
+      const s3 = '挑戰升級！';
+      const y = F.y + 12 - R((1 - easeOutBack(k)) * 24) - R(out * 16);
+      let x = R(F.cx - measure(s3, sc) / 2), i = 0;
+      for (const ch of s3) {
+        drawText(ctx, ch, x, y + R(Math.sin(t / 7 - i) * 2), { scale: sc, color: ['#ff7eb6', '#ffd84a', '#8ee86b', '#5ec4f0', '#ffffff'][i % 5], outline: '#1b2a5c', shadow: '#101a3c', alpha: 1 - out });
+        x += measure(ch, sc); i++;
+      }
+    }
     // every 5th: big "太棒了！" stamp over the frame
     if (r && r.big && r.t > 60) {
       const k = clamp((r.t - 60) / 16, 0, 1), out = clamp((r.t - 230) / 20, 0, 1);
@@ -712,8 +805,27 @@ export class Game {
     for (const c of this.cards) this.drawCardObj(ctx, c);
     // tutorial hand
     if (this.scene === 'round' && !this.revealed) {
-      const first = this.round === 0 ? 150 : 720;
+      const first = this.firstEver && this.round === 0 ? HINT_FIRST : HINT_HAND;
       if (this.idle > first) this.drawHandDemo(ctx, (this.idle - first) % 110);
+    }
+  }
+
+  // speed bar: drains over 10 s; gold -> green -> sky -> grey as the points tier drops
+  drawSpeedBar(ctx) {
+    if (this.readyT == null || this.revealed) return;
+    const L = this.L, B = L.banner;
+    const sec = (this.rt - this.readyT) / 60;
+    const frac = clamp(1 - sec / 10, 0, 1);
+    const bw = Math.min(120, L.CW - 80), bh = 4;
+    const x = R(B.cx - bw / 2), y = B.y + 4 + 26;
+    const col = sec <= 2.5 ? '#ffd84a' : sec <= 4 ? '#8ee86b' : sec <= 6 ? '#5ec4f0' : '#9aa3c0';
+    ctx.fillStyle = '#101a3c'; ctx.fillRect(x - 1, y - 1, bw + 2, bh + 2);
+    ctx.fillStyle = '#1b2a5c'; ctx.fillRect(x, y, bw, bh);
+    const fw = R(bw * frac);
+    if (fw > 0) {
+      ctx.fillStyle = col; ctx.fillRect(x, y, fw, bh);
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(x, y, fw, 1);
+      if (sec <= 2.5 && ((this.t / 4) | 0) % 2) { ctx.fillStyle = '#ffffff'; ctx.fillRect(x + fw - 1, y - 1, 2, bh + 2); }
     }
   }
 
@@ -733,6 +845,7 @@ export class Game {
         drawText(ctx, ch, x, y, { scale: sc, color: '#ffffff', outline: '#1b2a5c', shadow: '#101a3c', alpha: a });
         x += w;
       }
+      this.drawSpeedBar(ctx);
       return;
     }
     const name = BY_ID[this.ans].name;

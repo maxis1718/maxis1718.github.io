@@ -95,7 +95,8 @@ if (scenario === 'long') {
   const seen = [];
   for (let r = 0; r < Number(process.env.ROUNDS || 30); r++) {
     let I = await waitScene('round', 1500);
-    seen.push(I.ans);
+    seen.push(I.ans + '/' + I.cards.length);
+    if ([0, 5, 10, 12].includes(r)) { await step(20); await shot('long_r' + r); }
     if (Math.random() < 0.3) { // a wrong tap first
       const w = I.cards.find((c) => c.id !== I.ans);
       await ev({ t: 'down', x: w.x, y: w.y }); await step(2); await ev({ t: 'up', x: w.x, y: w.y }); await step(50);

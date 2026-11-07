@@ -319,12 +319,12 @@ function chord(name) {
   return { root: midi(m[1] + '0') - 12, iv: CHORD_Q[m[2]] }; // root as pitch class (octave -1)
 }
 // bars: ['C', 'Dm G', ...]; fn(chord, step, len, barIndex) -> events [step, midi, len]
-function perChord(bars, fn) {
+function perChord(bars, fn, BL = 16) {
   const ev = [];
   bars.forEach((b, bi) => {
     const cs = b.trim().split(/\s+/);
-    const L = 16 / cs.length;
-    cs.forEach((c, ci) => ev.push(...fn(chord(c), bi * 16 + ci * L, L, bi)));
+    const L = BL / cs.length;
+    cs.forEach((c, ci) => ev.push(...fn(chord(c), bi * BL + ci * L, L, bi)));
   });
   return ev;
 }
@@ -483,8 +483,157 @@ function compile(song) {
   song.stepDur = 60 / song.bpm / 4;
   return song;
 }
-const SONGS = { title: songTitle, play: songPlay };
-const JINGLES = { cheer: songCheer, big: songBig, question: songQuestion };
+const shift = (ev, by) => ev.map((e) => [e[0] + by, e[1], e[2]]);
+
+// ----- BGM 'town': hometown at dawn — pastoral 3/4 waltz, G major, 92 bpm, 24 bars (A/B/A')
+function songTown() {
+  const BL = 12;
+  const bars = [
+    'G', 'Em', 'C', 'D', 'G', 'Bm', 'C', 'D',
+    'Em', 'C', 'G', 'D', 'C', 'D', 'Em', 'D',
+    'G', 'Em', 'C', 'D', 'Am', 'D', 'G', 'G',
+  ];
+  const lead = mel(
+    'D5:6 B4:2 D5:4 | E5:6 G5:2 E5:4 | C5:4 E5:4 G5:4 | F#5:8 E5:2 D5:2 |' +
+    'B4:6 D5:2 G5:4 | F#5:4 D5:4 B4:4 | E5:4 G5:4 C6:4 | A5:12 |' +
+    'B5:6 A5:2 G5:4 | E5:6 G5:2 C6:4 | B5:4 A5:4 G5:4 | A5:8 F#5:4 |' +
+    'G5:6 E5:2 C5:4 | D5:4 F#5:4 A5:4 | G5:6 F#5:2 E5:4 | D5:8 r:4 |' +
+    'D5:6 B4:2 D5:4 | E5:6 G5:2 B5:4 | C6:6 B5:2 A5:4 | A5:4 F#5:4 D5:4 |' +
+    'C5:4 E5:4 A5:4 | A5:6 G5:2 F#5:4 | G5:12 | r:8 B4:2 C5:2'
+  );
+  // 'pah-pah' on beats 2 & 3 (A sections); soft held 3rds in B
+  const harm = perChord(bars, (c, s, L, bi) =>
+    bi >= 8 && bi < 16
+      ? [[s, tn(c, 1, 4), 6], [s + 6, tn(c, 2, 4), 6]]
+      : [[s + 4, tn(c, 1, 4), 3], [s + 8, tn(c, 2, 4), 3]], BL);
+  const bass = perChord(bars, (c, s, L, bi) =>
+    bi >= 8 && bi < 16 ? [[s, bn(c, 0, 41), 6], [s + 8, bn(c, 2, 41), 4]] : [[s, bn(c, 0, 41), 4]], BL);
+  const drums = [];
+  for (let b = 0; b < 24; b++) {
+    const o = b * BL;
+    drums.push([o, 'k', 0.35]);
+    for (const k of [2, 4, 6, 8, 10]) drums.push([o + k, 'h', k % 4 === 0 ? 0.4 : 0.25]);
+  }
+  return {
+    bpm: 92, steps: 24 * BL,
+    tracks: [
+      { ev: lead, wave: 'p25s', vol: 0.4, a: 0.012, d: 0.3, s: 0.55, r: 0.14, gate: 0.92, vib: [5, 14, 0.2], send: 0.45, pan: -0.12 },
+      { ev: harm, wave: 'p12s', vol: 0.16, a: 0.006, d: 0.2, s: 0.35, r: 0.1, gate: 0.75, send: 0.35, pan: 0.3 },
+      { ev: bass, wave: 'gbw', vol: 0.32, a: 0.01, d: 0.4, s: 0.55, r: 0.1, gate: 0.85, pan: 0 },
+    ],
+    drums, drumVol: 0.55,
+  };
+}
+
+// ----- BGM 'route': first route out of town — walking march, D major, 130 bpm, 24 bars (A / call-response / bridge)
+function songRoute() {
+  const bars = [
+    'D', 'D', 'G', 'A', 'Bm', 'G', 'Em A', 'D',
+    'G', 'D', 'G', 'A', 'G', 'D', 'Em', 'A',
+    'Bm', 'G', 'D', 'A', 'Bm', 'G', 'E', 'A7',
+  ];
+  const lead = mel(
+    'D5:3 D5:1 F#5:3 F#5:1 A5:4 F#5:4 | E5:3 F#5:1 E5:2 D5:2 A4:8 | B4:3 B4:1 D5:3 D5:1 G5:4 B5:4 | A5:6 G5:2 F#5:4 E5:4 |' +
+    'F#5:3 F#5:1 B5:3 A5:1 F#5:4 D5:4 | G5:3 F#5:1 E5:2 D5:2 B4:8 | E5:2 G5:2 B5:4 C#6:2 B5:2 A5:4 | D6:8 r:8 |' +
+    'G5:2 B5:2 D6:4 r:8 | A5:2 F#5:2 D5:4 r:8 | G5:2 A5:2 B5:4 r:8 | C#6:4 B5:2 A5:2 r:8 |' +
+    'B5:2 A5:2 G5:4 r:8 | F#5:2 A5:2 D6:4 r:8 | E5:2 G5:2 B5:4 r:8 | A5:4 B5:4 C#6:8 |' +
+    'F#5:6 B5:2 A5:4 F#5:4 | G5:6 B5:2 D6:8 | F#5:6 A5:2 D6:4 C#6:4 | C#6:6 B5:2 A5:8 |' +
+    'B5:4 A5:2 F#5:2 D5:4 F#5:4 | G5:4 A5:2 B5:2 D6:8 | E6:6 D6:2 B5:4 G#5:4 | A5:4 C#6:4 E6:4 r:2 A4:2'
+  );
+  // pulse 2: offbeat stabs (A), answers to the lead's calls (B), sustained 3rds (bridge)
+  const stabs = perChord(bars.slice(0, 8), (c, s, L) => {
+    const out = [];
+    for (let i = 2, k = 0; i < L; i += 4, k++) out.push([s + i, tn(c, k % 2 ? 2 : 1, 4), 1]);
+    return out;
+  });
+  const answers = shift(mel(
+    'r:8 D5:2 E5:2 D5:2 B4:2 | r:8 F#5:2 E5:2 D5:2 A4:2 | r:8 D5:2 E5:2 G5:2 D5:2 | r:8 E5:2 C#5:2 E5:2 A5:2 |' +
+    'r:8 D5:2 B4:2 G4:2 B4:2 | r:8 A4:2 D5:2 F#5:2 A5:2 | r:8 G5:2 E5:2 B4:2 E5:2 | E5:4 F#5:4 G5:8'
+  ), 128);
+  const pads = perChord(bars.slice(16), (c, s, L) => [[s + 256, tn(c, 1, 4), 8], [s + 264, tn(c, 2, 4), 8]]);
+  const bassPat = ['R', null, '5', null, 'R', null, '5', 'O'];
+  const bass = perChord(bars, (c, s, L) => {
+    const out = [];
+    for (let i = 0; i < L / 2; i++) {
+      const p = bassPat[i];
+      if (!p) continue;
+      const r = bn(c, 0);
+      out.push([s + i * 2, p === 'R' ? r : p === 'O' ? r + 12 : bn(c, 2), p === 'O' ? 1 : 2]);
+    }
+    return out;
+  });
+  const drums = [];
+  for (let b = 0; b < 24; b++) {
+    const o = b * 16, fill = b % 8 === 7;
+    drums.push([o, 'k', 0.6], [o + 8, 'k', 0.5], [o + 4, 's', 0.45]);
+    if (!fill) drums.push([o + 12, 's', 0.45]);
+    else drums.push([o + 10, 's', 0.3], [o + 12, 's', 0.4], [o + 13, 's', 0.3], [o + 14, 's', 0.4], [o + 15, 's', 0.5]);
+    for (const k of [2, 6, 10, 14]) drums.push([o + k, 'h', 0.45]);
+    if (b >= 16) for (const k of [1, 5, 9, 13]) drums.push([o + k, 'h', 0.2]);
+    if (b % 8 === 0) drums.push([o, 'c', 0.35]);
+  }
+  return {
+    bpm: 130, steps: 384,
+    tracks: [
+      { ev: lead, wave: 'p25s', vol: 0.38, a: 0.005, d: 0.14, s: 0.5, r: 0.06, gate: 0.85, vib: [6, 12, 0.22], send: 0.28, pan: -0.2 },
+      { ev: [...stabs, ...answers, ...pads], wave: 'p12s', vol: 0.17, a: 0.004, d: 0.1, s: 0.4, r: 0.05, gate: 0.8, send: 0.2, pan: 0.3 },
+      { ev: bass, wave: 'gbw', vol: 0.34, a: 0.005, d: 0.12, s: 0.55, r: 0.04, gate: 0.6, pan: 0 },
+    ],
+    drums, drumVol: 0.55,
+  };
+}
+
+// ----- BGM 'center': cosy healing centre — swung, bell-like, Bb major, 100 bpm, 16 bars
+function songCenter() {
+  const bars = [
+    'Bbmaj7', 'Gm7', 'Cm7', 'F7', 'Bbmaj7', 'Gm7', 'Ebmaj7', 'F7',
+    'Dm7', 'Gm7', 'Cm7', 'F7', 'Ebmaj7', 'Dm7', 'Cm7 F7', 'Bb',
+  ];
+  const lead = mel(
+    'F5:2 D5:2 F5:2 A5:2 Bb5:4 A5:4 | G5:2 F5:2 D5:2 Bb4:2 D5:8 | Eb5:2 G5:2 Bb5:2 G5:2 C6:4 Bb5:4 | A5:6 G5:2 F5:4 Eb5:4 |' +
+    'D5:2 F5:2 Bb5:2 D6:2 C6:4 Bb5:4 | Bb5:2 A5:2 G5:2 F5:2 D5:8 | G5:2 Bb5:2 D6:4 C6:2 Bb5:2 G5:4 | F5:6 G5:2 A5:4 C6:4 |' +
+    'D6:4 C6:2 A5:2 F5:8 | Bb5:4 A5:2 F5:2 D5:8 | Eb5:2 F5:2 G5:2 Bb5:2 Eb6:4 D6:4 | C6:6 A5:2 F5:8 |' +
+    'G5:2 F5:2 G5:2 Bb5:2 D6:8 | C6:2 A5:2 F5:2 D5:2 A5:8 | G5:4 Eb5:4 F5:4 A5:4 | Bb5:8 r:4 F5:2 A5:2'
+  );
+  // music-box broken 7th chords in swung 8ths
+  const arp = perChord(bars, (c, s, L) => {
+    const pat = [[0, 3], [2, 3], [3, 3], [5, 3], [0, 3], [2, 3], [3, 3], [6, 3]];
+    const out = [];
+    for (let i = 0; i < L / 2; i++) out.push([s + i * 2, tn(c, pat[i][0], pat[i][1]), 2]);
+    return out;
+  });
+  const bass = perChord(bars, (c, s, L) =>
+    L === 16 ? [[s, bn(c, 0, 41), 6], [s + 8, bn(c, 2, 41), 6]] : [[s, bn(c, 0, 41), 6]]);
+  const drums = [];
+  for (let b = 0; b < 16; b++) {
+    drums.push([b * 16, 'k', 0.3], [b * 16 + 8, 'k', 0.2]);
+    for (const k of [2, 6, 10, 14]) drums.push([b * 16 + k, 'h', 0.3]);
+  }
+  return {
+    bpm: 100, steps: 256, swing: 0.34,
+    tracks: [
+      { ev: lead, wave: 'p12s', vol: 0.36, a: 0.004, d: 0.35, s: 0.3, r: 0.18, gate: 0.9, vib: [5, 10, 0.25], send: 0.45, pan: -0.12, dbl: [2, 0.35, 'tri', 0.25] },
+      { ev: arp, wave: 'p25s', vol: 0.12, a: 0.004, d: 0.22, s: 0.15, r: 0.12, gate: 0.7, send: 0.35, pan: 0.3, dbl: [2, 0.4, 'tri', 0.15] },
+      { ev: bass, wave: 'gbw', vol: 0.3, a: 0.012, d: 0.4, s: 0.5, r: 0.1, gate: 0.85, pan: 0 },
+    ],
+    drums, drumVol: 0.5,
+  };
+}
+
+function songLevelup() {
+  return {
+    bpm: 160, steps: 14, gain: 0.7,
+    tracks: [
+      { ev: mel('G5:1 A5:1 B5:1 D6:1 r:1 B5:1 D6:1 G6:7'), wave: 'p25s', vol: 0.34, a: 0.004, d: 0.16, s: 0.55, r: 0.25, gate: 0.9, vib: [6.5, 18, 0.15], send: 0.35 },
+      { ev: mel('D5:1 F#5:1 G5:1 B5:1 r:1 G5:1 B5:1 D6:7'), wave: 'p12s', vol: 0.2, a: 0.004, d: 0.16, s: 0.5, r: 0.25, gate: 0.9, send: 0.25 },
+      { ev: mel('G3:4 D4:3 G3:7'), wave: 'gbw', vol: 0.42, a: 0.005, d: 0.15, s: 0.6, r: 0.15, gate: 0.8 },
+    ],
+    drums: [[0, 'k', 0.8], [4, 's', 0.5], [6, 's', 0.5], [7, 'k', 0.8], [7, 'c', 0.8]], drumVol: 0.8,
+  };
+}
+
+const SONGS = { title: songTitle, play: songPlay, town: songTown, route: songRoute, center: songCenter };
+const JINGLES = { cheer: songCheer, big: songBig, question: songQuestion, levelup: songLevelup };
 const songCache = new WeakMap();
 function getSong(E, name, table) {
   let c = songCache.get(E);
@@ -505,6 +654,10 @@ function playStep(E, song, list, t, buses, bgm, pitch = 1) {
     };
     if (n.last && tr.lastSlide) { o.f = f * tr.lastSlide; o.fp = [[0.09, f]]; }
     tone(E, o);
+    if (tr.dbl) { // bell layer: [freq mul, vol ratio, wave, decay]
+      const [mul, vr, w, dd] = tr.dbl;
+      tone(E, { t, f: f * mul, dur: Math.min(dur, 0.05), wave: w, vol: tr.vol * G * vr, a: 0.003, d: dd, s: 0.05, r: dd, dest: o.dest, send: tr.send, bgm });
+    }
   }
 }
 
@@ -545,7 +698,9 @@ function pump(E, p, until) {
   if (p.t0 + p.next * sd < now - 0.03) p.t0 = now + 0.05 - p.next * sd;
   while (p.t0 + p.next * sd < until) {
     const step = p.next % p.song.steps;
-    playStep(E, p.song, p.song.by[step], p.t0 + p.next * sd, p.buses, true);
+    // swing: delay the off-beat 8th
+    const sw = p.song.swing && step % 4 === 2 ? p.song.swing * sd : 0;
+    playStep(E, p.song, p.song.by[step], p.t0 + p.next * sd + sw, p.buses, true);
     p.next++;
   }
 }
@@ -634,6 +789,16 @@ const SFX = {
   },
   question(E, t) {
     return playJingle(E, 'question', t);
+  },
+  levelup(E, t) {
+    dipBgm(E, t, 1.5);
+    return playJingle(E, 'levelup', t);
+  },
+  score(E, t) {
+    // soft 2-note coin-ish blip
+    tone(E, { t, f: nf('C6'), dur: 0.035, wave: 'p12s', vol: 0.16, a: 0.003, d: 0.04, s: 0.6, r: 0.015 });
+    tone(E, { t: t + 0.05, f: nf('G6'), dur: 0.04, wave: 'p12s', vol: 0.16, a: 0.003, d: 0.12, s: 0.15, r: 0.1, send: 0.3 });
+    return tone(E, { t: t + 0.05, f: nf('G5'), dur: 0.04, wave: 'tri', vol: 0.12, a: 0.003, d: 0.12, s: 0.15, r: 0.1 });
   },
 };
 
