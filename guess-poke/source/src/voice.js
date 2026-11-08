@@ -1,6 +1,7 @@
 // Mandarin (Taiwan) speech via the Web Speech API. Fully optional: silently no-ops if unavailable.
 const SS = typeof window !== 'undefined' && window.speechSynthesis ? window.speechSynthesis : null;
 const keep = [];
+const IOS = typeof navigator !== 'undefined' && (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 let confirmed = false, lastUnlock = 0;
 let voice = null, unlocked = false, enabled = true, onDuck = null, speaking = 0;
 
@@ -38,8 +39,8 @@ export const voiceAPI = {
     lastUnlock = now;
     try {
       const u = new SpeechSynthesisUtterance('嗯');
-      u.volume = 0; u.rate = 2; u.lang = voice ? voice.lang : 'zh-TW';
-      if (voice) u.voice = voice;
+      u.volume = 0; u.rate = 2; u.lang = voice && !IOS ? voice.lang : 'zh-TW';
+      if (voice && !IOS) u.voice = voice;
       u.onstart = () => { confirmed = true; };
       u.onend = () => { confirmed = true; };
       keep.push(u); if (keep.length > 4) keep.shift();
@@ -49,6 +50,12 @@ export const voiceAPI = {
   },
   cancel() { if (SS) { try { SS.cancel(); } catch (e) {} } speaking = 0; onDuck && onDuck(false); },
   get busy() { return speaking > 0; },
+  // synchronous: never defers (a deferred speak() loses the user gesture on iOS)
+  sayNow(text, { rate = 0.92, pitch = 1.35, onend } = {}) {
+    if (!SS || !enabled) { onend && setTimeout(onend, 600); return; }
+    try { if (SS.speaking || SS.pending) SS.cancel(); } catch (e) {}
+    this._speak(text, rate, pitch, onend);
+  },
   say(text, { rate = 0.92, pitch = 1.35, onend } = {}) {
     if (!SS || !enabled) { onend && setTimeout(onend, 600); return; }
     const busy = (() => { try { return SS.speaking || SS.pending; } catch (e) { return false; } })();
@@ -59,8 +66,8 @@ export const voiceAPI = {
     try {
       const u = new SpeechSynthesisUtterance(text);
       keep.push(u); if (keep.length > 4) keep.shift(); // Chrome GC bug: keep a reference so onend fires
-      u.lang = voice ? voice.lang : 'zh-TW';
-      if (voice) u.voice = voice;
+      u.lang = voice && !IOS ? voice.lang : 'zh-TW';
+      if (voice && !IOS) u.voice = voice; // iOS: let the system pick its installed zh-TW voice
       u.rate = rate; u.pitch = pitch; u.volume = 1;
       speaking++;
       onDuck && onDuck(true);
@@ -78,7 +85,7 @@ export const voiceAPI = {
         try {
           SS.cancel();
           const u2 = new SpeechSynthesisUtterance(text);
-          u2.lang = u.lang; if (voice) u2.voice = voice; u2.rate = rate; u2.pitch = pitch; u2.volume = 1;
+          u2.lang = u.lang; if (voice && !IOS) u2.voice = voice; u2.rate = rate; u2.pitch = pitch; u2.volume = 1;
           u2.onstart = () => { started = true; confirmed = true; };
           u2.onend = end; u2.onerror = end;
           keep.push(u2); if (keep.length > 4) keep.shift();

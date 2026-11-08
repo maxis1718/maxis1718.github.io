@@ -221,6 +221,18 @@ export class Game {
     const sess = this.sess;
     this.nextP = new Promise((res) => setTimeout(() => { if (sess !== this.sess) return res(null); this.queueNext(); this.nextP.then(res); }, 700));
   }
+  // speech is queued and spoken from inside the next user gesture (iOS only allows speak() there);
+  // if no gesture comes within ~1 s it is spoken anyway (fine on desktop/Android, best effort on iOS)
+  queueSpeech(text, onend) {
+    this.pendingSay = { text, onend, at: performance.now() };
+  }
+  flushSpeech(inGesture) {
+    const p = this.pendingSay;
+    if (!p) return;
+    if (!inGesture && performance.now() - p.at < (this.ptr.down ? 3000 : 1000)) return; // finger still down: wait for its touchend
+    this.pendingSay = null;
+    this.voice.sayNow(p.text, { onend: p.onend });
+  }
   sayLater(text, ms, guard) {
     clearTimeout(this._sayTo);
     this._sayTo = setTimeout(() => { if (!guard || guard()) this.voice.say(text); }, ms);
@@ -305,7 +317,7 @@ export class Game {
           this._repeatT = this.t;
           this.silHopV = -4.4; this.sfx('twinkle');
           this.fx.sparkles(ev.x, ev.y, 4, 14);
-          this.voice.say(BY_ID[this.ans].name);
+          this.queueSpeech(BY_ID[this.ans].name);
         }
         return;
       }
@@ -342,7 +354,7 @@ export class Game {
         if (ev.t === 'cancel') return;
         // tap a parading Pokémon -> it hops and says its name; anywhere else starts
         const m = this.titleHit(ev.x, ev.y);
-        if (m) { m.hopV = -4.2; this.sfx('twinkle'); this.voice.say(BY_ID[m.id].name); return; }
+        if (m) { m.hopV = -4.2; this.sfx('twinkle'); this.queueSpeech(BY_ID[m.id].name); return; }
         this.begin();
         return;
       }
@@ -395,7 +407,7 @@ export class Game {
     if (!dragged) { c.hopV = -2.5; }
     this.silShake = 1;
     this.sfx('nope');
-    if (!this.voice.busy) this.sayLater('不是我喔～', 420);
+    if (!this.voice.busy) this.queueSpeech('不是我喔！');
     // after a miss, show the hint sooner
     this.idle = Math.max(this.idle, (this.firstEver && this.round === 0 ? HINT_FIRST : HINT_BOUNCE) - 240);
   }
@@ -403,6 +415,7 @@ export class Game {
   flyToFrame(c, dur) {
     const F = this.L.frame;
     clearTimeout(this._sayTo);
+    this.queueSpeech('是' + BY_ID[this.ans].name + '！', () => { if (this.rev) this.rev.voiceDone = true; });
     const sec = Math.max(0, (this.rt - (this.readyT == null ? this.rt : this.readyT)) / 60);
     const sp = speedOf(sec);
     this.gain = { pts: Math.round(sp[1] * (1 + 0.5 * (this.n - 3))), label: sp[2], sec, fast: sp[1] >= 80 };
@@ -417,6 +430,7 @@ export class Game {
   update(dt, events) {
     this.t += dt;
     for (const ev of events) this.handle(ev);
+    if (dt > 0) this.flushSpeech(false);
     const L = this.L;
     if (!L) return;
     this.fx.update(dt);
@@ -563,7 +577,7 @@ export class Game {
     if (at(12)) {
       this.bannerT = 0.0001;
       const name = BY_ID[this.ans].name;
-      this.voice.say('是' + name + '！', { onend: () => (r.voiceDone = true) });
+
     }
     if (at(14)) {
       const n = r.big ? 6 : 3;

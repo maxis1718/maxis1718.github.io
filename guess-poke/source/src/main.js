@@ -46,9 +46,13 @@ const toBuffer = (cx, cy) => {
   return { x: ((cx - r.left) / r.width) * W, y: ((cy - r.top) / r.height) * H };
 };
 let unlocked = false;
-const input = createInput(canvas, toBuffer, () => {
+const input = createInput(canvas, toBuffer, (kind) => {
   try { audio.unlock(); } catch (e) {}
-  voiceAPI.unlock();
+  // handle the tap/release right now, inside the user gesture, so that speech it triggers is allowed on iOS
+  try { if (!manual) game.update(0, input.drain()); } catch (e) {}
+  // iOS treats touchend/click/keydown (not a touch pointerup) as the gesture that may start speech
+  if (kind !== 'pointerup-touch') { try { game.flushSpeech(true); } catch (e) {} }
+  if (kind !== 'pointerup-touch') voiceAPI.unlock();
   if (!unlocked) { unlocked = true; }
 });
 

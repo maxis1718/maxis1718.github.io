@@ -3,11 +3,11 @@ import { readFileSync, existsSync } from 'fs';
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
 await ctx.addInitScript(() => {
-  window.__said = [];
+  window.__said = []; window.__inEvt = ''; for (const t of ['touchend','click','pointerup']) window.addEventListener(t, () => { window.__inEvt += t + ' '; setTimeout(() => (window.__inEvt = ''), 0); }, true);
   class U { constructor(t) { this.text = t; } }
   window.SpeechSynthesisUtterance = U;
   const ss = { speaking: false, pending: false, getVoices: () => [{ lang: 'zh-TW', name: 'Mei-Jia', localService: true }], addEventListener() {},
-    speak(u) { window.__said.push([performance.now() | 0, u.text]); ss.speaking = true; setTimeout(() => { ss.speaking = false; u.onend && u.onend(); }, 800); },
+    speak(u) { window.__said.push([performance.now() | 0, u.text, window.__inEvt]); ss.speaking = true; setTimeout(() => { ss.speaking = false; u.onend && u.onend(); }, 800); },
     cancel() { window.__said.push([performance.now() | 0, '<cancel>']); ss.speaking = false; } };
   Object.defineProperty(window, 'speechSynthesis', { value: ss });
 });
@@ -34,6 +34,20 @@ for (let r = 0; r < 4; r++) {
   if (!c) { console.log('no card', I.scene); continue; }
   await tap(c.x, c.y);
   await page.waitForTimeout(4500);
+}
+// drag with auto-snap while the finger is still down, release a bit later
+{
+  await page.waitForTimeout(2500);
+  const I = await page.evaluate(() => { const g = window.__gp.game; return { ans: g.ans, F: g.L.frame, cards: g.cards.map((c) => ({ id: c.id, x: c.x, y: c.y })) }; });
+  const c = I.cards.find((c) => c.id === I.ans);
+  const css = async (bx, by) => page.evaluate(([bx, by]) => { const r = document.getElementById('c').getBoundingClientRect(); return [r.left + bx / window.__gp.W * r.width, r.top + by / window.__gp.H * r.height]; }, [bx, by]);
+  const [sx, sy] = await css(c.x, c.y), [ex, ey] = await css(I.F.cx, I.F.cy);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: sx, y: sy }] });
+  for (let i = 1; i <= 20; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: sx + (ex - sx) * i / 20, y: sy + (ey - sy) * i / 20 }] }); await page.waitForTimeout(16); }
+  await page.waitForTimeout(400);
+  console.log('snapped while held:', await page.evaluate(() => !!window.__gp.game.rev));
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForTimeout(3000);
 }
 console.log(JSON.stringify(await page.evaluate(() => window.__said)));
 await browser.close();

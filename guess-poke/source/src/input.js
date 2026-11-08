@@ -28,12 +28,13 @@ export function createInput(canvas, toBuffer, onGesture) {
     const p = pos(e);
     q.push({ t: cancel ? 'cancel' : 'up', id: e.pointerId, x: p.x, y: p.y, time: performance.now() });
   };
-  canvas.addEventListener('pointerup', (e) => { up(e, false); onGesture && onGesture(); });
+  canvas.addEventListener('pointerup', (e) => { up(e, false); onGesture && onGesture(e.pointerType === 'touch' ? 'pointerup-touch' : 'pointerup'); });
   canvas.addEventListener('pointercancel', (e) => up(e, true));
   canvas.addEventListener('lostpointercapture', (e) => { if (active.has(e.pointerId)) up(e, false); });
   // iOS only unlocks audio / speech on touchend / click, not touchstart
-  canvas.addEventListener('touchend', () => onGesture && onGesture(), { passive: true });
-  window.addEventListener('keydown', (e) => { onGesture && onGesture(); q.push({ t: 'key', key: e.key }); });
+  canvas.addEventListener('touchend', () => onGesture && onGesture('touchend'), { passive: true });
+  canvas.addEventListener('click', () => onGesture && onGesture('click'));
+  window.addEventListener('keydown', (e) => { q.push({ t: 'key', key: e.key }); onGesture && onGesture('keydown'); });
   const reset = () => { for (const id of active) q.push({ t: 'cancel', id, x: -1, y: -1 }); active.clear(); };
   window.addEventListener('blur', reset);
   document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
