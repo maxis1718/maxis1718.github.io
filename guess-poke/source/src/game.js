@@ -21,7 +21,7 @@ const TRACKS = ['route', 'town', 'center'];
 const SPEED = [[2.5, 100, '閃電！'], [4, 80, '超快！'], [6, 60, '好快！'], [10, 40, '答對了！'], [1e9, 20, '答對了！']];
 const speedOf = (sec) => SPEED.find((s) => sec <= s[0]);
 const HINT_BOUNCE = 600, HINT_HAND = 1080, HINT_FIRST = 300; // frames of no touching (10 s / 18 s / first-ever round 5 s)
-const cardsFor = (correct) => (correct >= 10 ? 5 : correct >= 5 ? 4 : 3);
+const cardsFor = (correct) => (correct >= 15 ? 6 : correct >= 8 ? 5 : correct >= 3 ? 4 : 3);
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 export class Game {
@@ -34,12 +34,14 @@ export class Game {
     this.round = 0; this.correct = 0; this.meter = 0;
     this.recent = this.loadJSON('recent', []);
     this.bag = this.loadJSON('bag', []);
+    // roster changed (new Pokémon added) -> start a fresh shuffled bag so the new ones show up right away
+    if (store.get('bagv') !== String(ROSTER.length)) { this.bag = []; store.set('bagv', String(ROSTER.length)); }
     this.score = 0; // this game's score (resets every time she presses 開始)
     this.best = parseInt(store.get('best') || '0', 10) || 0;
     this.bestAtStart = this.best;
     this.newRecord = false; this.record = null;
     this.sess = 0; this.homeHold = 0;
-    this.firstEver = !store.get('bag');
+    this.firstEver = !store.get('bag') && !store.get('played');
     this.gain = null;
     this.recentCards = [];
     this.n = 3;
@@ -59,8 +61,9 @@ export class Game {
     this.inTransition = 0;
     this.stats = { rounds: 0, wrong: 0, snaps: 0 };
     // title: warm up favourites
-    const favs = [25, 4, 7, 1, 393, 702, 235];
-    favs.forEach((id, i) => {
+    // title parade: 7 random Pokémon each visit (Pikachu always leads)
+    const others = shuffle(ROSTER.map((p) => p.id).filter((id) => id !== 25)).slice(0, 6);
+    [25, ...others].forEach((id, i) => {
       loadImage(id);
       this.titleMons.push({ id, x: 0, hop: 0, hopV: 0, ph: i * 0.9 });
     });
@@ -118,7 +121,10 @@ export class Game {
   saveBag() { this.store.set('bag', JSON.stringify(this.bag)); }
   chooseDistractors(ans, k = 2, stage = 1) {
     const a = BY_ID[ans];
-    const easy = stage < 3;
+    const easy = stage < 2;          // 3 cards: all different colours
+    const mid = stage < 3;           // 4 cards: nothing the same colour as the answer
+    const lookalike = stage >= 3;    // 5-6 cards: at least one same-colour distractor (harder to tell apart)
+    const groupOK = stage >= 4;      // 6 cards: even close relatives (Pikachu vs Raichu) can appear
     const out = [];
     const recentC = new Set(this.recentCards);
     for (let tries = 0; tries < 900 && out.length < k; tries++) {
@@ -126,9 +132,10 @@ export class Game {
       const p = ROSTER[(Math.random() * ROSTER.length) | 0];
       if (p.id === ans || isFailed(p.id) || out.includes(p.id)) continue;
       if (tries < 600 && recentC.has(p.id)) continue; // don't show the same faces round after round
-      if (Math.random() > (p.fav ? 0.9 : 0.5)) continue;
-      if (a.group && p.group === a.group) continue;
-      if (easy && p.color === a.color) continue;
+      if (Math.random() > 0.6) continue;
+      if (!groupOK && a.group && p.group === a.group) continue;
+      if (mid && p.color === a.color) continue;
+      if (lookalike && out.length === 0 && tries < 500 && p.color !== a.color) continue;
       if (easy && out.some((o) => BY_ID[o].color === p.color)) continue;
       if (p.group && out.some((o) => BY_ID[o].group === p.group)) continue;
       out.push(p.id);
@@ -223,6 +230,7 @@ export class Game {
     if (this.started) return;
     this.started = true;
     const sess = ++this.sess;
+    this.store.set('played', '1');
     resetFailed();
     this.score = 0; this.newRecord = false; this.record = null; this.bestAtStart = this.best;
     this.correct = 0; this.meter = 0; this.round = this.firstEver ? 0 : this.round; this.n = 3; this.levelUp = null;

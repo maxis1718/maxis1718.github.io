@@ -5,9 +5,9 @@ export function computeLayout(W, H, n = 3) {
   const x0 = Math.floor((W - CW) / 2);
   const gap3 = Math.max(6, Math.round(CW * 0.03));
   const w3 = Math.floor((CW - gap3 * 4) / 3);
-  let cols = n === 4 ? 4 : 3, rows = n === 5 ? 2 : 1;
+  let cols = n === 4 ? 4 : 3, rows = n >= 5 ? 2 : 1;
   const gap = n === 4 ? Math.max(5, Math.round(CW * 0.025)) : gap3;
-  let cardW = n === 4 ? Math.floor((CW - gap * 5) / 4) : n === 5 ? Math.round(w3 * 0.84) : w3;
+  let cardW = n === 4 ? Math.floor((CW - gap * 5) / 4) : n >= 5 ? Math.round(w3 * 0.84) : w3;
   const cardH = Math.round(cardW * 1.16);
   const rowGap = 8;
   const bottom = Math.max(12, Math.round(H * 0.04));
@@ -25,10 +25,10 @@ export function computeLayout(W, H, n = 3) {
   const fb = frameY + frameH;
   const bannerY = fb + Math.round((cardsY - fb - bannerH) * 0.42);
   const cards = [];
-  const rowCounts = n === 5 ? [3, 2] : [n];
+  const rowCounts = n === 5 ? [3, 2] : n === 6 ? [3, 3] : [n];
   let yy = cardsY;
   for (const cnt of rowCounts) {
-    const g = n === 5 ? Math.round((CW - cnt * cardW) / (cnt + 1)) : gap;
+    const g = n >= 5 ? Math.round((CW - cnt * cardW) / (cnt + 1)) : gap;
     const rowW = cnt * cardW + (cnt - 1) * g;
     const sx = x0 + Math.round((CW - rowW) / 2);
     for (let i = 0; i < cnt; i++) {
